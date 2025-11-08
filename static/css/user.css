@@ -1,0 +1,563 @@
+/* 사용자용 페이지 전용 스타일 */
+
+.user-container {
+    min-height: 100vh;
+}
+
+/* 스캔 섹션 */
+.scan-section {
+    background: var(--gradient-primary);
+    padding: 60px 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.scan-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="scan-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23scan-grid)"/></svg>');
+    opacity: 0.3;
+}
+
+.scan-header {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 40px;
+}
+
+.scan-header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 16px;
+}
+
+.scan-header p {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.scan-button-container {
+    position: relative;
+    z-index: 1;
+}
+
+.scan-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    backdrop-filter: blur(10px);
+    font-size: 1.3rem;
+    padding: 20px 40px;
+    min-width: 250px;
+    transition: all 0.3s ease;
+}
+
+.scan-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+}
+
+.btn-icon {
+    font-size: 1.5rem;
+    margin-right: 12px;
+}
+
+/* 가이드 섹션 */
+.guide-header {
+    margin-bottom: 32px;
+    text-align: center;
+}
+
+.guide-header h2 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.guide-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.security-guide {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.guide-item {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 24px;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.guide-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.guide-item.critical {
+    border: 6px solid var(--critical-color);
+    background: linear-gradient(135deg, rgba(204, 0, 0, 0.1) 0%, rgba(153, 0, 0, 0.05) 100%);
+    box-shadow: 0 0 25px rgba(204, 0, 0, 0.3);
+    animation: critical-glow 3s infinite;
+}
+
+.guide-item.critical:hover {
+    box-shadow: 0 0 35px rgba(204, 0, 0, 0.5);
+    transform: translateY(-3px);
+}
+
+.guide-item.critical .guide-title h3 {
+    color: var(--critical-color);
+    text-shadow: 0 0 15px rgba(204, 0, 0, 0.8), 0 0 25px rgba(204, 0, 0, 0.6);
+    font-weight: 700;
+    font-size: 1.4rem;
+    animation: critical-title-glow 2s infinite;
+}
+
+/* Critical 제목 추가 강조 */
+.critical-title {
+    color: var(--critical-color) !important;
+    text-shadow: 0 0 20px rgba(204, 0, 0, 1), 0 0 30px rgba(204, 0, 0, 0.8), 0 0 40px rgba(204, 0, 0, 0.6) !important;
+    font-weight: 800 !important;
+    font-size: 1.5rem !important;
+    letter-spacing: 1px !important;
+    animation: critical-title-glow 1.5s infinite !important;
+}
+
+.guide-item.danger {
+    border-color: var(--danger-color);
+}
+
+.guide-item.warning {
+    border-color: var(--warning-color);
+}
+
+.guide-item.safe {
+    border-color: var(--safe-color);
+}
+
+.guide-header-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.guide-item.critical .guide-icon {
+    filter: drop-shadow(0 0 10px rgba(204, 0, 0, 0.8));
+    animation: critical-icon-pulse 1.5s infinite;
+}
+
+.guide-title h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.guide-item.danger .guide-title h3 {
+    color: var(--danger-color);
+}
+
+.guide-item.warning .guide-title h3 {
+    color: var(--warning-color);
+}
+
+.guide-item.safe .guide-title h3 {
+    color: var(--safe-color);
+}
+
+/* Critical 등급 강화 애니메이션 */
+@keyframes critical-title-glow {
+    0% {
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.8), 0 0 25px rgba(204, 0, 0, 0.6);
+    }
+    50% {
+        text-shadow: 0 0 20px rgba(204, 0, 0, 1), 0 0 35px rgba(204, 0, 0, 0.8);
+    }
+    100% {
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.8), 0 0 25px rgba(204, 0, 0, 0.6);
+    }
+}
+
+@keyframes critical-icon-pulse {
+    0% {
+        filter: drop-shadow(0 0 10px rgba(204, 0, 0, 0.8));
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 15px rgba(204, 0, 0, 1));
+        transform: scale(1.1);
+    }
+    100% {
+        filter: drop-shadow(0 0 10px rgba(204, 0, 0, 0.8));
+        transform: scale(1);
+    }
+}
+
+.guide-title p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.guide-description {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.guide-description p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.guide-protocols {
+    margin-bottom: 16px;
+}
+
+.guide-protocols strong {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.protocol-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.protocol-tag {
+    background: var(--secondary-bg);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid var(--border-color);
+}
+
+.guide-recommendations strong {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.guide-recommendations ul {
+    list-style: none;
+    padding: 0;
+}
+
+.guide-recommendations li {
+    padding: 4px 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    position: relative;
+    padding-left: 20px;
+}
+
+.guide-recommendations li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--accent-blue);
+    font-weight: bold;
+}
+
+/* 와이파이 목록 */
+.wifi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.wifi-header h2 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.wifi-count {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    background: var(--card-bg);
+    padding: 6px 12px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 24px;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+/* 와이파이 아이템 (사용자용) */
+.wifi-item-user {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.wifi-item-user:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    border-color: var(--accent-blue);
+}
+
+.wifi-info-user {
+    flex: 1;
+}
+
+.wifi-name-user {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.wifi-protocol-user {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.wifi-status-user {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+/* 로딩 상태 */
+.scan-loading {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+}
+
+.scan-loading .btn-icon {
+    animation: spin 1s linear infinite;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .scan-header h1 {
+        font-size: 2rem;
+    }
+    
+    .scan-header p {
+        font-size: 1rem;
+    }
+    
+    .scan-btn {
+        font-size: 1.1rem;
+        padding: 16px 32px;
+        min-width: 200px;
+    }
+    
+    .guide-header-item {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .guide-icon {
+        margin-right: 0;
+        margin-bottom: 12px;
+    }
+    
+    .wifi-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .wifi-item-user {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    
+    .wifi-status-user {
+        align-items: flex-start;
+        width: 100%;
+    }
+}
+
+/* 와이파이 아이템 선택 상태 */
+.wifi-item-user.selected {
+    border-color: var(--accent-blue);
+    background: rgba(74, 158, 255, 0.1);
+}
+
+.wifi-item-user {
+    cursor: pointer;
+}
+
+/* 와이파이 상세 정보 영역 */
+.wifi-detail {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 24px;
+    border: 2px solid var(--border-color);
+    min-height: 400px;
+}
+
+.wifi-detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 4px;
+}
+
+.detail-header h2 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 0;
+}
+
+.detail-section h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+}
+
+.detail-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.detail-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px;
+    background: var(--secondary-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.detail-info-item label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.detail-info-item span {
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.encryption-yes {
+    color: var(--safe-color);
+    font-weight: 600;
+}
+
+.encryption-no {
+    color: var(--critical-color);
+    font-weight: 600;
+}
+
+.detail-description {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.detail-recommendations {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.detail-recommendations li {
+    padding: 8px 12px;
+    padding-left: 28px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    position: relative;
+    background: var(--secondary-bg);
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+.detail-recommendations li::before {
+    content: '•';
+    position: absolute;
+    left: 10px;
+    color: var(--accent-blue);
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .detail-info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .detail-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+}

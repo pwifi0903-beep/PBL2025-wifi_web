@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}로그인 - wisafe{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <!-- 헤더 -->
+    <header class="app-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="app-brand">
+                    <a href="/" class="app-name-link">
+                        <h1 class="app-name">wisafe</h1>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="login-card">
+        <div class="login-header">
+            <div class="login-icon">
+                <span>🔧</span>
+            </div>
+            <h1>관리자 로그인</h1>
+            <p>관리자용 페이지에 접근하려면 로그인이 필요합니다.</p>
+        </div>
+
+        <form method="POST" class="login-form">
+            <div class="form-group">
+                <label for="username" class="form-label">아이디</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    name="username" 
+                    class="form-input" 
+                    required
+                    autocomplete="username"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">비밀번호</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    class="form-input" 
+                    required
+                    autocomplete="current-password"
+                >
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-large login-btn">
+                로그인
+            </button>
+        </form>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('.login-form');
+    const submitBtn = document.querySelector('.login-btn');
+    
+    form.addEventListener('submit', function(e) {
+        submitBtn.textContent = '로그인 중...';
+        submitBtn.disabled = true;
+    });
+    
+    // 폼 입력 시 버튼 활성화
+    const inputs = document.querySelectorAll('.form-input');
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (username && password) {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}사용자용 - wisafe{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/user.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="user-container">
+    <!-- 헤더 -->
+    <header class="app-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="app-brand">
+                    <a href="http://127.0.0.1:5000" class="app-name-link">
+                        <h1 class="app-name">wisafe</h1>
+                    </a>
+                </div>
+                <div class="page-title">
+                    <h2>사용자용 페이지</h2>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 스캔 버튼 섹션 -->
+    <div class="scan-section">
+        <div class="container">
+            <div class="scan-header">
+                <h1>와이파이 보안 스캔</h1>
+                <p>주변 와이파이 네트워크의 보안 상태를 확인하세요</p>
+            </div>
+            <div class="scan-button-container">
+                <button id="scanBtn" class="btn btn-primary btn-large scan-btn">
+                    <span class="btn-icon">📶</span>
+                    와이파이 스캔
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div class="main-layout">
+        <!-- 좌측: 와이파이 목록 -->
+        <div class="sidebar">
+            <div class="wifi-header">
+                <h2>스캔된 와이파이</h2>
+                <p id="wifiCount" class="wifi-count">스캔을 시작하세요</p>
+            </div>
+            
+            <div id="wifiList" class="wifi-list">
+                <div class="empty-state">
+                    <div class="empty-icon">📶</div>
+                    <h3>아직 스캔하지 않았습니다</h3>
+                    <p>위의 '와이파이 스캔' 버튼을 클릭하여 주변 와이파이를 확인하세요.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 설명 영역 -->
+        <div class="content">
+            <div id="wifiDetail" class="wifi-detail">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <h3>와이파이를 선택하세요</h3>
+                    <p>왼쪽 목록에서 와이파이를 선택하면 상세 정보가 표시됩니다.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 보안 가이드 데이터를 JavaScript에서 사용할 수 있도록 전달
+    const securityGuideData = {{ security_guide | tojson | safe }};
+</script>
+<script src="{{ url_for('static', filename='js/user.js') }}"></script>
+{% endblock %}

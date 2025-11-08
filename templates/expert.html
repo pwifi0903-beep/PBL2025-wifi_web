@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}관리자용 - wisafe{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/expert.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="expert-container">
+    <!-- 헤더 -->
+    <header class="app-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="app-brand">
+                    <a href="http://127.0.0.1:5000" class="app-name-link">
+                        <h1 class="app-name">wisafe</h1>
+                    </a>
+                </div>
+                <div class="page-title">
+                    <h2>관리자용 페이지</h2>
+                </div>
+                <div class="header-actions">
+                    <button id="logoutBtn" class="btn btn-small logout-btn">
+                        <span class="btn-icon">🚪</span>
+                        로그아웃
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 스캔 버튼 섹션 -->
+    <div class="scan-section">
+        <div class="container">
+            <div class="scan-header">
+                <h1>관리자용 와이파이 보안 분석</h1>
+                <p>상세한 네트워크 정보와 전문적인 보안 분석을 제공합니다</p>
+            </div>
+            <div class="scan-button-container">
+                <button id="scanBtn" class="btn btn-primary btn-large scan-btn">
+                    <span class="btn-icon">🔍</span>
+                    관리자용 스캔
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div class="main-layout">
+        <!-- 좌측: 와이파이 목록 -->
+        <div class="sidebar">
+            <div class="wifi-header">
+                <h2>스캔된 와이파이</h2>
+                <p id="wifiCount" class="wifi-count">스캔을 시작하세요</p>
+            </div>
+            
+            <div id="wifiList" class="wifi-list">
+                <div class="empty-state">
+                    <div class="empty-icon">🔍</div>
+                    <h3>아직 스캔하지 않았습니다</h3>
+                    <p>위의 '관리자용 스캔' 버튼을 클릭하여 상세한 와이파이 정보를 확인하세요.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 설명 영역 -->
+        <div class="content">
+            <div id="wifiDetail" class="wifi-detail">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <h3>와이파이를 선택하세요</h3>
+                    <p>왼쪽 목록에서 와이파이를 선택하면 상세 정보가 표시됩니다.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 보안 점검 진행 표시 -->
+    <div id="securityCheckProgress" class="security-check-progress" style="display: none;">
+        <div class="progress-overlay">
+            <div class="progress-content">
+                <h3>보안 점검 진행 중</h3>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <p id="progressText">점검을 시작합니다...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 보안 가이드 데이터를 JavaScript에서 사용할 수 있도록 전달
+    const securityGuideData = {{ security_guide | tojson | safe }};
+</script>
+<script src="{{ url_for('static', filename='js/expert.js') }}"></script>
+{% endblock %}
