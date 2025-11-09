@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}로그인 - wisafe{% endblock %}
+{% block title %}로그인 - WiSAFE{% endblock %}
 
 {% block content %}
 <div class="login-container">
@@ -10,7 +10,7 @@
             <div class="header-content">
                 <div class="app-brand">
                     <a href="/" class="app-name-link">
-                        <h1 class="app-name">wisafe</h1>
+                        <h1 class="app-name">WiSAFE</h1>
                     </a>
                 </div>
             </div>
@@ -26,7 +26,14 @@
             <p>관리자용 페이지에 접근하려면 로그인이 필요합니다.</p>
         </div>
 
-        <form method="POST" class="login-form">
+        <form id="loginForm" class="login-form">
+            {% if error %}
+            <div class="alert alert-error" style="margin-bottom: 20px;">
+                {{ error }}
+            </div>
+            {% endif %}
+            <div id="errorMessage" class="alert alert-error" style="display: none; margin-bottom: 20px;"></div>
+            
             <div class="form-group">
                 <label for="username" class="form-label">아이디</label>
                 <input 
@@ -63,13 +70,68 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('.login-form');
+    const form = document.getElementById('loginForm');
     const submitBtn = document.querySelector('.login-btn');
+    const errorMessage = document.getElementById('errorMessage');
     
     form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        
+        if (!username || !password) {
+            showError('아이디와 비밀번호를 입력해주세요.');
+            return;
+        }
+        
+        // 로딩 상태
         submitBtn.textContent = '로그인 중...';
         submitBtn.disabled = true;
+        errorMessage.style.display = 'none';
+        
+        // AJAX 로그인 요청
+        fetch('/expert/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: username,
+                password: password
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 토큰을 localStorage에 저장
+                if (data.access_token) {
+                    localStorage.setItem('access_token', data.access_token);
+                }
+                if (data.refresh_token) {
+                    localStorage.setItem('refresh_token', data.refresh_token);
+                }
+                
+                // 로그인 성공 - 전문가 페이지로 리다이렉트
+                window.location.href = '/expert';
+            } else {
+                showError(data.error || '로그인에 실패했습니다.');
+                submitBtn.textContent = '로그인';
+                submitBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('네트워크 오류가 발생했습니다.');
+            submitBtn.textContent = '로그인';
+            submitBtn.disabled = false;
+        });
     });
+    
+    function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+    }
     
     // 폼 입력 시 버튼 활성화
     const inputs = document.querySelectorAll('.form-input');

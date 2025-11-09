@@ -51,6 +51,23 @@ class WiFiDataGenerator:
             }
             wifi_list.append(wifi_data)
         
+        # Rogue AP 시나리오 추가: 같은 SSID를 가진 WiFi (WPA2와 OPEN)
+        rogue_ap_ssid = "Cafe_WiFi"
+        
+        # 정상 WiFi (WPA2)
+        wifi_list.append({
+            "ssid": rogue_ap_ssid,
+            "protocol": "WPA2",
+            "security_level": "safe"
+        })
+        
+        # Rogue AP (OPEN) - 같은 SSID
+        wifi_list.append({
+            "ssid": rogue_ap_ssid,
+            "protocol": "OPEN",
+            "security_level": "critical"
+        })
+        
         return wifi_list
     
     def generate_expert_wifi_list(self) -> List[Dict[str, Any]]:
@@ -105,6 +122,33 @@ class WiFiDataGenerator:
                 "encryption": self._get_encryption_type(protocol)
             }
             wifi_list.append(wifi_data)
+        
+        # Rogue AP 시나리오 추가: 같은 SSID를 가진 WiFi (WPA2와 OPEN)
+        rogue_ap_ssid = "Cafe_WiFi"
+        
+        # 정상 WiFi (WPA2)
+        wifi_list.append({
+            "ssid": rogue_ap_ssid,
+            "bssid": "00:11:22:33:44:70",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -55,
+            "encryption": "WPA2-CCMP"
+        })
+        
+        # Rogue AP (OPEN) - 같은 SSID
+        wifi_list.append({
+            "ssid": rogue_ap_ssid,
+            "bssid": "00:11:22:33:44:71",
+            "protocol": "OPEN",
+            "channel": 6,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -60,
+            "encryption": "없음"
+        })
         
         return wifi_list
     

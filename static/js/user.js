@@ -78,11 +78,36 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const wifiHTML = wifiDataArray.map((wifi, index) => `
+        // 같은 SSID를 가진 WiFi 그룹화
+        const ssidGroups = {};
+        wifiDataArray.forEach(wifi => {
+            if (!ssidGroups[wifi.ssid]) {
+                ssidGroups[wifi.ssid] = [];
+            }
+            ssidGroups[wifi.ssid].push(wifi);
+        });
+        
+        // Rogue AP 탐지: 같은 SSID 중 OPEN 프로토콜이 있는지 확인
+        const rogueApSsids = new Set();
+        Object.keys(ssidGroups).forEach(ssid => {
+            const group = ssidGroups[ssid];
+            if (group.length > 1) {
+                const hasOpen = group.some(wifi => wifi.protocol && wifi.protocol.toUpperCase() === 'OPEN');
+                if (hasOpen) {
+                    rogueApSsids.add(ssid);
+                }
+            }
+        });
+        
+        const wifiHTML = wifiDataArray.map((wifi, index) => {
+            const isRogueAp = rogueApSsids.has(wifi.ssid) && wifi.protocol && wifi.protocol.toUpperCase() === 'OPEN';
+            
+            return `
             <div class="wifi-item-user" data-index="${index}">
                 <div class="wifi-info-user">
                     <div class="wifi-name-user">${escapeHtml(wifi.ssid)}</div>
                     <div class="wifi-protocol-user">프로토콜: ${wifi.protocol}</div>
+                    ${isRogueAp ? '<div class="rogue-warning">⚠️ 가짜 와이파이 의심</div>' : ''}
                 </div>
                 <div class="wifi-status-user">
                     <span class="security-level ${wifi.security_level}">
@@ -90,7 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     </span>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
         
         document.getElementById('wifiList').innerHTML = wifiHTML;
         

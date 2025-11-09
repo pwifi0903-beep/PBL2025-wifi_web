@@ -1,4 +1,4 @@
-/* wisafe 공통 스타일 - 다크 모드 기반 */
+/* WiSAFE 공통 스타일 - 다크 모드 기반 */
 
 :root {
     /* 색상 시스템 */
@@ -135,6 +135,9 @@ body {
     border-radius: 12px;
     padding: 24px;
     border: 1px solid var(--border-color);
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .content {

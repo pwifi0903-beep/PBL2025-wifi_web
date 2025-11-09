@@ -1,5 +1,102 @@
 // 관리자용 페이지 JavaScript
 
+// JWT 토큰 관리 함수
+function getAccessToken() {
+    // localStorage에서 토큰 가져오기
+    return localStorage.getItem('access_token');
+}
+
+function getRefreshToken() {
+    // localStorage에서 Refresh Token 가져오기
+    return localStorage.getItem('refresh_token');
+}
+
+function setAccessToken(token) {
+    // Access Token 저장
+    localStorage.setItem('access_token', token);
+}
+
+function clearTokens() {
+    // 모든 토큰 삭제
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+}
+
+function getAuthHeaders() {
+    // Authorization 헤더 생성
+    const token = getAccessToken();
+    const headers = {
+        'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+}
+
+async function refreshAccessToken() {
+    // Refresh Token으로 Access Token 갱신
+    const refreshToken = getRefreshToken();
+    
+    if (!refreshToken) {
+        return false;
+    }
+    
+    try {
+        const response = await fetch('/api/expert/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${refreshToken}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.access_token) {
+            setAccessToken(data.access_token);
+            return true;
+        }
+    } catch (error) {
+        console.error('Token refresh error:', error);
+    }
+    
+    return false;
+}
+
+async function fetchWithAuth(url, options = {}) {
+    // 인증이 포함된 fetch 요청
+    const authHeaders = getAuthHeaders();
+    
+    // 기존 헤더와 병합
+    const headers = options.headers ? { ...authHeaders, ...options.headers } : authHeaders;
+    options.headers = headers;
+    
+    let response = await fetch(url, options);
+    
+    // 401 응답 시 토큰 갱신 시도
+    if (response.status === 401) {
+        const refreshed = await refreshAccessToken();
+        
+        if (refreshed) {
+            // 토큰 갱신 성공 - 재요청
+            const newAuthHeaders = getAuthHeaders();
+            const newHeaders = options.headers ? { ...newAuthHeaders, ...options.headers } : newAuthHeaders;
+            options.headers = newHeaders;
+            response = await fetch(url, options);
+        } else {
+            // 토큰 갱신 실패 - 로그인 페이지로 리다이렉트
+            clearTokens();
+            window.location.href = '/expert/login';
+            return null;
+        }
+    }
+    
+    return response;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const scanBtn = document.getElementById('scanBtn');
     const wifiList = document.getElementById('wifiList');
@@ -14,8 +111,19 @@ document.addEventListener('DOMContentLoaded', function() {
     let wifiDataList = [];
     
     // 로그아웃 버튼 클릭 이벤트
-    logoutBtn.addEventListener('click', function() {
+    logoutBtn.addEventListener('click', async function() {
         if (confirm('정말 로그아웃하시겠습니까?')) {
+            // 로그아웃 API 호출
+            try {
+                await fetchWithAuth('/expert/logout', {
+                    method: 'POST'
+                });
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            
+            // 토큰 삭제 및 로그인 페이지로 이동
+            clearTokens();
             window.location.href = '/expert/login';
         }
     });
@@ -54,17 +162,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function performScan() {
-        fetch('/api/expert/scan', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+        fetchWithAuth('/api/expert/scan', {
+            method: 'POST'
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response) return null;
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
-                wifiDataList = data.wifi_list;
-                displayWifiList(data.wifi_list);
+                // OPEN 프로토콜인 경우 자동으로 취약 상태로 설정
+                wifiDataList = data.wifi_list.map(wifi => {
+                    if (wifi.protocol && wifi.protocol.toUpperCase() === 'OPEN') {
+                        wifi.check_status = 'vulnerable';
+                    }
+                    return wifi;
+                });
+                displayWifiList(wifiDataList);
                 wifiCount.textContent = `${data.count}개의 와이파이 발견`;
             } else {
                 showError('스캔 중 오류가 발생했습니다: ' + data.error);
@@ -91,18 +205,63 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const wifiHTML = wifiDataArray.map((wifi, index) => `
+        // 같은 SSID를 가진 WiFi 그룹화
+        const ssidGroups = {};
+        wifiDataArray.forEach(wifi => {
+            if (!ssidGroups[wifi.ssid]) {
+                ssidGroups[wifi.ssid] = [];
+            }
+            ssidGroups[wifi.ssid].push(wifi);
+        });
+        
+        // Rogue AP 탐지: 같은 SSID 중 OPEN 프로토콜이 있는지 확인
+        const rogueApSsids = new Set();
+        Object.keys(ssidGroups).forEach(ssid => {
+            const group = ssidGroups[ssid];
+            if (group.length > 1) {
+                const hasOpen = group.some(wifi => wifi.protocol && wifi.protocol.toUpperCase() === 'OPEN');
+                if (hasOpen) {
+                    rogueApSsids.add(ssid);
+                }
+            }
+        });
+        
+        const wifiHTML = wifiDataArray.map((wifi, index) => {
+            // 취약 점검 상태 확인
+            // OPEN 프로토콜인 경우 자동으로 취약으로 표시
+            let checkStatus = wifi.check_status || 'unchecked';
+            if (wifi.protocol && wifi.protocol.toUpperCase() === 'OPEN') {
+                checkStatus = 'vulnerable';
+            }
+            const checkStatusText = getCheckStatusText(checkStatus);
+            const checkStatusClass = checkStatus;
+            
+            // Rogue AP 확인
+            const isRogueAp = rogueApSsids.has(wifi.ssid) && wifi.protocol && wifi.protocol.toUpperCase() === 'OPEN';
+            
+            return `
             <div class="wifi-item-expert" data-index="${index}">
                 <div class="wifi-info-expert">
                     <div class="wifi-name-expert">${escapeHtml(wifi.ssid)}</div>
+                    ${isRogueAp ? '<div class="rogue-warning">⚠️ Rogue AP 의심</div>' : ''}
                 </div>
                 <div class="wifi-status-expert">
-                    <span class="security-level ${wifi.security_level}">
-                        ${getSecurityLevelText(wifi.security_level)}
-                    </span>
+                    <div class="status-item">
+                        <span class="status-label">프로토콜 위험도:</span>
+                        <span class="security-level ${wifi.security_level}">
+                            ${getSecurityLevelText(wifi.security_level)}
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">점검 결과:</span>
+                        <span class="check-status ${checkStatusClass}">
+                            ${checkStatusText}
+                        </span>
+                    </div>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
         
         document.getElementById('wifiList').innerHTML = wifiHTML;
         
@@ -211,7 +370,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 <div class="detail-section">
                     <h3>취약점 및 공격 벡터</h3>
-                    <ul class="detail-attack-vectors">
+                    <ul id="detailVulnList" class="detail-attack-vectors">
                         ${attackVectorsList}
                     </ul>
                 </div>
@@ -324,16 +483,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearInterval(stepInterval);
                 
                 // 실제 보안 점검 API 호출
-                fetch('/api/expert/security-check', {
+                fetchWithAuth('/api/expert/security-check', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
                     body: JSON.stringify({
                         protocol: wifiData.protocol
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response) return null;
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         showSecurityCheckResult(data.result);
@@ -356,6 +515,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function showSecurityCheckResult(result) {
+        if (!currentWifiData) return;
+        
+        // 점검 결과에 따라 취약 여부 판단
+        // risk_level이 'danger' 또는 'warning'이면 취약, 'safe'면 안전
+        const isVulnerable = result.risk_level === 'danger' || 
+                            result.risk_level === 'warning' || 
+                            result.risk_level === 'critical';
+        
+        // WiFi 데이터에 점검 상태 저장
+        currentWifiData.check_status = isVulnerable ? 'vulnerable' : 'safe';
+        
+        // WiFi 목록에서 해당 항목 찾아서 업데이트
+        const wifiItems = document.querySelectorAll('.wifi-item-expert');
+        wifiItems.forEach(item => {
+            const index = parseInt(item.dataset.index);
+            if (wifiDataList[index] && wifiDataList[index].ssid === currentWifiData.ssid) {
+                wifiDataList[index].check_status = currentWifiData.check_status;
+                
+                // 점검 결과 칸 업데이트
+                const checkStatusElement = item.querySelector('.check-status');
+                if (checkStatusElement) {
+                    checkStatusElement.className = `check-status ${currentWifiData.check_status}`;
+                    checkStatusElement.textContent = getCheckStatusText(currentWifiData.check_status);
+                }
+            }
+        });
+        
         // 취약점 목록 업데이트
         const vulnList = document.getElementById('detailVulnList');
         if (result.vulnerabilities && result.vulnerabilities.length > 0) {
@@ -369,7 +555,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // 권고사항 표시
         if (result.recommendations && result.recommendations.length > 0) {
             const recommendations = result.recommendations.join('\n• ');
-            showAlert(`보안 점검 완료!\n\n권고사항:\n• ${recommendations}`, 'success');
+            showAlert('보안 점검 완료!\n\n권고사항:\n• ' + recommendations, 'success');
         } else {
             showAlert('보안 점검이 완료되었습니다.', 'success');
         }
@@ -403,10 +589,53 @@ document.addEventListener('DOMContentLoaded', function() {
         return levelTexts[level] || '알 수 없음';
     }
     
+    function getCheckStatusText(status) {
+        const statusTexts = {
+            'vulnerable': '취약',
+            'safe': '안전',
+            'unchecked': '미점검'
+        };
+        return statusTexts[status] || '미점검';
+    }
+    
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+    
+    function showAlert(message, type) {
+        // Popup 창으로 표시
+        const popup = document.getElementById('resultPopup');
+        const popupTitle = document.getElementById('popupTitle');
+        const popupMessage = document.getElementById('popupMessage');
+        const popupCloseBtn = document.getElementById('popupCloseBtn');
+        const popupConfirmBtn = document.getElementById('popupConfirmBtn');
+        
+        // 제목 설정
+        const titles = {
+            'success': '✅ 보안 점검 완료',
+            'error': '❌ 오류 발생',
+            'warning': '⚠️ 경고'
+        };
+        popupTitle.textContent = titles[type] || '알림';
+        
+        // 메시지 설정 (줄바꿈 처리)
+        popupMessage.innerHTML = message.replace(/\n/g, '<br>');
+        
+        // Popup 표시
+        popup.style.display = 'flex';
+        
+        // 닫기 버튼 이벤트
+        const closePopup = () => {
+            popup.style.display = 'none';
+        };
+        
+        popupCloseBtn.onclick = closePopup;
+        popupConfirmBtn.onclick = closePopup;
+        
+        // 배경 클릭 시 닫기
+        popup.querySelector('.popup-overlay').onclick = closePopup;
     }
     
     // 페이지 로드 시 초기 상태 설정

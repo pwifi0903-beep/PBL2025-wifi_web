@@ -362,6 +362,28 @@
     margin-bottom: 4px;
 }
 
+.rogue-warning {
+    color: #ff4444;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 68, 68, 0.1);
+    border-radius: 6px;
+    border: 1px solid #ff4444;
+    display: inline-block;
+    animation: rogue-pulse 2s infinite;
+}
+
+@keyframes rogue-pulse {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(255, 68, 68, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(255, 68, 68, 0.6);
+    }
+}
+
 .wifi-status-user {
     display: flex;
     flex-direction: column;

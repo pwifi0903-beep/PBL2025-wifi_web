@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}관리자용 - wisafe{% endblock %}
+{% block title %}관리자용 - WiSAFE{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/expert.css') }}">
@@ -14,7 +14,7 @@
             <div class="header-content">
                 <div class="app-brand">
                     <a href="http://127.0.0.1:5000" class="app-name-link">
-                        <h1 class="app-name">wisafe</h1>
+                        <h1 class="app-name">WiSAFE</h1>
                     </a>
                 </div>
                 <div class="page-title">
@@ -85,6 +85,23 @@
                     <div id="progressFill" class="progress-fill" style="width: 0%"></div>
                 </div>
                 <p id="progressText">점검을 시작합니다...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 결과 팝업 -->
+    <div id="resultPopup" class="result-popup" style="display: none;">
+        <div class="popup-overlay"></div>
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3 id="popupTitle">보안 점검 결과</h3>
+                <button id="popupCloseBtn" class="popup-close-btn">×</button>
+            </div>
+            <div class="popup-body">
+                <div id="popupMessage"></div>
+            </div>
+            <div class="popup-footer">
+                <button id="popupConfirmBtn" class="btn btn-primary">확인</button>
             </div>
         </div>
     </div>
