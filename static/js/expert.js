@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // 진행 표시 시작
         securityCheckProgress.style.display = 'flex';
         progressFill.style.width = '0%';
-        progressText.textContent = '크래킹을 시작합니다...';
+        progressText.textContent = '점검을 시작합니다...';
         
         // 기존 polling 중지
         if (progressPollInterval) {
@@ -481,39 +481,94 @@ document.addEventListener('DOMContentLoaded', function() {
             progressPollInterval = null;
         }
         
-        // 크래킹 시작 API 호출
-        fetchWithAuth('/api/expert/security-check', {
-            method: 'POST',
-            body: JSON.stringify({
-                wifi_data: wifiData,
-                protocol: wifiData.protocol
+        // 더미 데이터인지 확인
+        const isRealScan = wifiData.is_real_scan === true;
+        
+        if (isRealScan) {
+            // 실제 스캔 데이터인 경우 크래킹 시작
+            fetchWithAuth('/api/expert/security-check', {
+                method: 'POST',
+                body: JSON.stringify({
+                    wifi_data: wifiData,
+                    protocol: wifiData.protocol
+                })
             })
-        })
-        .then(response => {
-            if (!response) return null;
-            return response.json();
-        })
-        .then(data => {
-            if (data.success && data.cracking_id) {
-                // 크래킹 ID 저장
-                currentCrackingId = data.cracking_id;
-                
-                // 실시간 진행 상황 polling 시작
-                startProgressPolling(currentCrackingId);
-            } else if (data.success && data.result) {
-                // 시뮬레이션 결과인 경우 (WiFi 데이터 없음)
-                showSecurityCheckResult(data.result);
+            .then(response => {
+                if (!response) return null;
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.cracking_id) {
+                    // 크래킹 ID 저장
+                    currentCrackingId = data.cracking_id;
+                    
+                    // 실시간 진행 상황 polling 시작
+                    startProgressPolling(currentCrackingId);
+                } else {
+                    showAlert('보안 점검 중 오류가 발생했습니다: ' + (data.error || '알 수 없는 오류'), 'error');
+                    securityCheckProgress.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('네트워크 오류가 발생했습니다.', 'error');
                 securityCheckProgress.style.display = 'none';
-            } else {
-                showAlert('보안 점검 중 오류가 발생했습니다: ' + (data.error || '알 수 없는 오류'), 'error');
-                securityCheckProgress.style.display = 'none';
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showAlert('네트워크 오류가 발생했습니다.', 'error');
-            securityCheckProgress.style.display = 'none';
-        });
+            });
+        } else {
+            // 더미 데이터인 경우 이전처럼 시뮬레이션 진행 애니메이션
+            const steps = [
+                '1/4 보안 설정 확인 중...',
+                '2/4 약한 암호화 확인 중...',
+                '3/4 취약점 스캔 중...',
+                '4/4 분석 완료 중...'
+            ];
+            
+            let currentStep = 0;
+            const stepInterval = setInterval(() => {
+                if (currentStep < steps.length) {
+                    progressFill.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
+                    progressText.textContent = steps[currentStep];
+                    currentStep++;
+                } else {
+                    clearInterval(stepInterval);
+                    
+                    // 실제 보안 점검 API 호출
+                    fetchWithAuth('/api/expert/security-check', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            wifi_data: wifiData,
+                            protocol: wifiData.protocol
+                        })
+                    })
+                    .then(response => {
+                        if (!response) return null;
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            if (data.result) {
+                                // 시뮬레이션 결과
+                                showSecurityCheckResult(data.result);
+                            } else {
+                                showAlert('보안 점검 중 오류가 발생했습니다.', 'error');
+                            }
+                        } else {
+                            showAlert('보안 점검 중 오류가 발생했습니다: ' + (data.error || '알 수 없는 오류'), 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showAlert('네트워크 오류가 발생했습니다.', 'error');
+                    })
+                    .finally(() => {
+                        // 진행 표시 숨김
+                        setTimeout(() => {
+                            securityCheckProgress.style.display = 'none';
+                        }, 2000);
+                    });
+                }
+            }, 1250); // 5초 / 4단계 = 1.25초씩
+        }
     }
     
     function startProgressPolling(crackingId) {

@@ -6,6 +6,7 @@ import csv
 import json
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+from config import Config
 
 class WiFiScanner:
     """aircrack-ng를 사용한 실제 WiFi 스캔 서비스"""
@@ -66,9 +67,10 @@ class WiFiScanner:
     def start_monitor_mode(self, interface: str) -> Optional[str]:
         """모니터 모드 활성화"""
         try:
-            # airmon-ng로 모니터 모드 시작
+            # airmon-ng로 모니터 모드 시작 (sudo 비밀번호 자동 입력)
             result = subprocess.run(
-                ['sudo', 'airmon-ng', 'start', interface],
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S airmon-ng start {interface}",
+                shell=True,
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -96,7 +98,8 @@ class WiFiScanner:
         try:
             if monitor_interface:
                 subprocess.run(
-                    ['sudo', 'airmon-ng', 'stop', monitor_interface],
+                    f"echo '{Config.SUDO_PASSWORD}' | sudo -S airmon-ng stop {monitor_interface}",
+                    shell=True,
                     capture_output=True,
                     timeout=10
                 )
@@ -116,8 +119,28 @@ class WiFiScanner:
         # 출력 디렉토리 생성
         os.makedirs(self.scan_output_dir, exist_ok=True)
         
-        # 모니터 모드 활성화
-        self.monitor_interface = self.start_monitor_mode(self.interface)
+        # 이미 모니터 모드인지 확인
+        self.monitor_interface = None
+        try:
+            result = subprocess.run(
+                ['iwconfig'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            for line in result.stdout.split('\n'):
+                if 'Mode:Monitor' in line:
+                    match = re.search(r'^(\w+)\s+', line)
+                    if match:
+                        self.monitor_interface = match.group(1)
+                        print(f"이미 모니터 모드 활성화됨: {self.monitor_interface}")
+                        break
+        except Exception as e:
+            print(f"모니터 모드 확인 오류: {e}")
+        
+        # 모니터 모드가 없으면 활성화 시도
+        if not self.monitor_interface:
+            self.monitor_interface = self.start_monitor_mode(self.interface)
         
         if not self.monitor_interface:
             print("모니터 모드를 활성화할 수 없습니다.")
@@ -132,9 +155,10 @@ class WiFiScanner:
             if os.path.exists(csv_file):
                 os.remove(csv_file)
             
-            # airodump-ng 실행 (백그라운드)
+            # airodump-ng 실행 (백그라운드, sudo 비밀번호 자동 입력)
             process = subprocess.Popen(
-                ['sudo', 'airodump-ng', '-w', output_file, '--output-format', 'csv', self.monitor_interface],
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng -w {output_file} --output-format csv {self.monitor_interface}",
+                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
@@ -159,9 +183,11 @@ class WiFiScanner:
             print(f"WiFi 스캔 오류: {e}")
             return []
         finally:
-            # 모니터 모드 비활성화
-            if self.monitor_interface:
-                self.stop_monitor_mode(self.monitor_interface)
+            # 모니터 모드는 유지 (다음 스캔을 위해)
+            # 필요시 주석 해제하여 비활성화
+            # if self.monitor_interface:
+            #     self.stop_monitor_mode(self.monitor_interface)
+            pass
     
     def parse_airodump_csv(self, csv_file: str) -> List[Dict[str, Any]]:
         """airodump-ng CSV 파일 파싱"""
