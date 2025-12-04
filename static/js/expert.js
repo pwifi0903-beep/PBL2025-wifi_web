@@ -162,14 +162,41 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function performScan() {
-        fetchWithAuth('/api/expert/scan', {
-            method: 'POST'
-        })
+        // 타임아웃 설정 (60초)
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('요청 시간이 초과되었습니다.')), 60000);
+        });
+        
+        // API 요청과 타임아웃 경쟁
+        Promise.race([
+            fetchWithAuth('/api/expert/scan', {
+                method: 'POST'
+            }),
+            timeoutPromise
+        ])
         .then(response => {
-            if (!response) return null;
+            if (!response) {
+                throw new Error('서버 응답이 없습니다.');
+            }
+            
+            // HTTP 상태 코드 확인
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
+                } else if (response.status >= 500) {
+                    throw new Error('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+                } else {
+                    throw new Error(`서버 오류 (${response.status})`);
+                }
+            }
+            
             return response.json();
         })
         .then(data => {
+            if (!data) {
+                throw new Error('응답 데이터가 없습니다.');
+            }
+            
             if (data.success) {
                 // OPEN 프로토콜인 경우 자동으로 취약 상태로 설정
                 wifiDataList = data.wifi_list.map(wifi => {
@@ -181,12 +208,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayWifiList(wifiDataList);
                 wifiCount.textContent = `${data.count}개의 와이파이 발견`;
             } else {
-                showError('스캔 중 오류가 발생했습니다: ' + data.error);
+                const errorMsg = data.error || '알 수 없는 오류가 발생했습니다.';
+                showError('스캔 중 오류가 발생했습니다: ' + errorMsg);
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            showError('네트워크 오류가 발생했습니다.');
+            console.error('스캔 오류:', error);
+            
+            let errorMessage = '스캔 중 오류가 발생했습니다.';
+            if (error.message) {
+                if (error.message.includes('시간이 초과')) {
+                    errorMessage = '스캔 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+                } else if (error.message.includes('네트워크') || error.message.includes('fetch')) {
+                    errorMessage = '네트워크 연결을 확인해주세요.';
+                } else if (error.message.includes('인증')) {
+                    errorMessage = error.message;
+                } else {
+                    errorMessage = error.message;
+                }
+            }
+            
+            showError(errorMessage);
         })
         .finally(() => {
             resetScanButton();
