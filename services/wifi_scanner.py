@@ -76,18 +76,28 @@ class WiFiScanner:
                 timeout=10
             )
             
-            # 모니터 모드 인터페이스 이름 찾기 (보통 wlan0mon, wlan1mon 등)
-            for line in result.stdout.split('\n'):
-                if 'monitor mode enabled' in line.lower():
-                    match = re.search(r'on\s+(\w+)', line, re.IGNORECASE)
-                    if match:
-                        return match.group(1)
+            print(f"[모니터 모드] airmon-ng stdout:\n{result.stdout}")
+            if result.stderr:
+                print(f"[모니터 모드] airmon-ng stderr:\n{result.stderr}")
             
-            # 기본 패턴으로 찾기
-            if 'mon' in interface:
-                return interface
-            else:
-                return f"{interface}mon"
+            # 모니터 모드 활성화 후 iwconfig로 확인
+            # 이 시스템에서는 모니터 모드 인터페이스 이름이 원래 인터페이스와 동일함 (wlan0 -> wlan0)
+            iwconfig_result = subprocess.run(
+                ['iwconfig'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            # 원래 인터페이스가 모니터 모드인지 확인
+            for line in iwconfig_result.stdout.split('\n'):
+                if interface in line and 'Mode:Monitor' in line:
+                    print(f"[모니터 모드] 인터페이스 {interface}가 모니터 모드로 활성화됨")
+                    return interface
+            
+            # 원래 인터페이스 이름 반환 (이 시스템에서는 모니터 모드 인터페이스가 원래 이름과 동일)
+            print(f"[모니터 모드] 기본 인터페이스 사용: {interface}")
+            return interface
                 
         except Exception as e:
             print(f"모니터 모드 활성화 오류: {e}")
