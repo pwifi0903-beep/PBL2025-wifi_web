@@ -237,13 +237,36 @@ class WiFiScanner:
                     pass
             
             # stderr 확인 (프로세스 종료 후, 블로킹 방지)
+            # 주의: stderr.read()는 블로킹될 수 있으므로 타임아웃 사용
             stderr_output = ""
             try:
                 if process.stderr:
-                    # 프로세스가 종료되었으므로 읽기 시도
-                    stderr_output = process.stderr.read()
+                    # 타임아웃과 함께 stderr 읽기 (블로킹 방지)
+                    import threading
+                    import queue
+                    
+                    stderr_queue = queue.Queue()
+                    
+                    def read_stderr():
+                        try:
+                            if process.stderr:
+                                data = process.stderr.read()
+                                stderr_queue.put(data)
+                        except Exception:
+                            stderr_queue.put("")
+                    
+                    thread = threading.Thread(target=read_stderr)
+                    thread.daemon = True
+                    thread.start()
+                    thread.join(timeout=0.3)  # 0.3초 타임아웃
+                    
+                    try:
+                        stderr_output = stderr_queue.get_nowait()
+                    except queue.Empty:
+                        # 타임아웃 또는 데이터 없음 - 무시하고 진행
+                        pass
             except Exception as e:
-                # stderr 읽기 실패는 무시 (프로세스가 이미 종료되었을 수 있음)
+                # stderr 읽기 실패는 무시
                 pass
             
             if stderr_output:
