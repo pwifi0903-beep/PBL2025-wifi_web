@@ -67,9 +67,9 @@ class WiFiScanner:
     def start_monitor_mode(self, interface: str) -> Optional[str]:
         """모니터 모드 활성화"""
         try:
-            # airmon-ng로 모니터 모드 시작 (sudo 비밀번호 자동 입력)
+            # airmon-ng로 모니터 모드 시작 (sudo 비밀번호 자동 입력, -E로 환경 변수 유지)
             result = subprocess.run(
-                f"echo '{Config.SUDO_PASSWORD}' | sudo -S airmon-ng start {interface}",
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S -E airmon-ng start {interface}",
                 shell=True,
                 capture_output=True,
                 text=True,
@@ -108,7 +108,7 @@ class WiFiScanner:
         try:
             if monitor_interface:
                 subprocess.run(
-                    f"echo '{Config.SUDO_PASSWORD}' | sudo -S airmon-ng stop {monitor_interface}",
+                    f"echo '{Config.SUDO_PASSWORD}' | sudo -S -E airmon-ng stop {monitor_interface}",
                     shell=True,
                     capture_output=True,
                     timeout=10
@@ -171,15 +171,30 @@ class WiFiScanner:
         print(f"[5단계] 사용할 모니터 인터페이스: {self.monitor_interface}")
         
         try:
+            # 인터페이스 명시적으로 활성화
+            print(f"[6단계] 인터페이스 활성화 중...")
+            try:
+                up_result = subprocess.run(
+                    f"echo '{Config.SUDO_PASSWORD}' | sudo -S ip link set {self.monitor_interface} up",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                print(f"  - 인터페이스 {self.monitor_interface} 활성화 완료")
+                time.sleep(1)  # 인터페이스가 완전히 올라올 때까지 대기
+            except Exception as e:
+                print(f"  - 경고: 인터페이스 활성화 중 오류 (무시하고 진행): {e}")
+            
             # airodump-ng 실행 (stdout으로 직접 파싱)
-            print(f"[6단계] airodump-ng 실행 준비")
+            print(f"[7단계] airodump-ng 실행 준비")
             print(f"  - 인터페이스: {self.monitor_interface}")
             
-            # airodump-ng 실행 명령어 (stdout으로 출력)
+            # airodump-ng 실행 명령어 (sudo -E로 환경 변수 유지)
             # --ignore-negative-one: 이미 모니터 모드인 경우 ioctl 오류 무시
-            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng --ignore-negative-one {self.monitor_interface}"
-            print(f"[7단계] airodump-ng 실행 중...")
-            print(f"  - 명령어: airodump-ng --ignore-negative-one {self.monitor_interface}")
+            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S -E airodump-ng --ignore-negative-one {self.monitor_interface}"
+            print(f"[8단계] airodump-ng 실행 중...")
+            print(f"  - 명령어: sudo -E airodump-ng --ignore-negative-one {self.monitor_interface}")
             
             # airodump-ng 실행 (백그라운드, sudo 비밀번호 자동 입력)
             process = subprocess.Popen(
@@ -190,7 +205,7 @@ class WiFiScanner:
                 text=True
             )
             
-            print(f"[8단계] 스캔 대기 중... ({self.scan_duration}초)")
+            print(f"[9단계] 스캔 대기 중... ({self.scan_duration}초)")
             
             # stdout을 실시간으로 읽어서 파싱
             stdout_lines = []
@@ -220,7 +235,7 @@ class WiFiScanner:
                 
                 time.sleep(0.1)  # 0.1초마다 확인
             
-            print(f"[9단계] airodump-ng 프로세스 종료 중...")
+            print(f"[10단계] airodump-ng 프로세스 종료 중...")
             # 프로세스 강제 종료 (airodump-ng는 종료 신호에 잘 응답하지 않으므로 확실한 방법 사용)
             try:
                 # 먼저 SIGTERM 시도
@@ -312,11 +327,11 @@ class WiFiScanner:
             except Exception:
                 pass
             
-            print(f"[10단계] stdout 파싱 중... (총 {len(stdout_lines)}줄)")
+            print(f"[11단계] stdout 파싱 중... (총 {len(stdout_lines)}줄)")
             
             # stdout에서 WiFi 데이터 파싱
             wifi_list = self.parse_airodump_stdout(stdout_lines)
-            print(f"[11단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
+            print(f"[12단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
             
             if wifi_list:
                 for i, wifi in enumerate(wifi_list, 1):
