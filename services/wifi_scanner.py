@@ -189,9 +189,10 @@ class WiFiScanner:
                     print(f"  - 파일 삭제 실패: {e}")
             
             # airodump-ng 실행 명령어
-            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng -w {output_file} --output-format csv {self.monitor_interface}"
+            # --ignore-negative-one: 이미 모니터 모드인 경우 ioctl 오류 무시
+            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng --ignore-negative-one -w {output_file} --output-format csv {self.monitor_interface}"
             print(f"[7단계] airodump-ng 실행 중...")
-            print(f"  - 명령어: airodump-ng -w {output_file} --output-format csv {self.monitor_interface}")
+            print(f"  - 명령어: airodump-ng --ignore-negative-one -w {output_file} --output-format csv {self.monitor_interface}")
             
             # airodump-ng 실행 (백그라운드, sudo 비밀번호 자동 입력)
             process = subprocess.Popen(
@@ -228,6 +229,11 @@ class WiFiScanner:
                     print(f"  - 경고: 프로세스 종료 확인 실패, 계속 진행...")
                 else:
                     print(f"  - 프로세스 종료 완료 (반환 코드: {return_code})")
+                    
+                    # 반환 코드가 0이 아니면 오류 - CSV 파일이 생성되지 않았을 가능성
+                    if return_code != 0:
+                        print(f"  - 오류: airodump-ng가 오류 코드 {return_code}로 종료되었습니다.")
+                        print(f"  - CSV 파일이 생성되지 않았을 수 있습니다.")
             except Exception as e:
                 print(f"  - 프로세스 종료 오류: {e}, 강제 종료 시도...")
                 try:
@@ -271,6 +277,9 @@ class WiFiScanner:
             
             if stderr_output:
                 print(f"[경고] airodump-ng stderr:\n{stderr_output}")
+                # ioctl 오류는 --ignore-negative-one 옵션으로 무시 가능
+                if "ioctl(SIOCSIWMODE)" in stderr_output:
+                    print(f"  - 참고: ioctl 오류는 --ignore-negative-one 옵션으로 무시됩니다.")
             
             # CSV 파일이 생성될 때까지 짧은 대기 (파일 시스템 동기화)
             print(f"  - CSV 파일 생성 대기 중... (0.5초)")
