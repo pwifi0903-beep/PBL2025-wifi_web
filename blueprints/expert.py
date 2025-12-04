@@ -118,7 +118,7 @@ def expert_scan_wifi():
 @expert_bp.route('/api/expert/security-check', methods=['POST'])
 @login_required
 def security_check():
-    """보안 점검 API (크래킹 시작)"""
+    """보안 점검 API (크래킹 시작 또는 시뮬레이션)"""
     try:
         data = request.get_json()
         wifi_data = data.get('wifi_data')
@@ -141,18 +141,38 @@ def security_check():
                 'error': 'OPEN 네트워크는 크래킹이 불필요합니다.'
             }), 400
         
-        # 크래킹 시작
-        if wifi_data:
-            cracking_id = cracking_service.start_cracking(
-                wifi_data,
-                interface=Config.WIFI_INTERFACE
-            )
-            
+        # 더미 데이터인지 확인 (is_real_scan이 False이거나 없으면 더미 데이터)
+        is_real_scan = wifi_data.get('is_real_scan', False) if wifi_data else False
+        
+        # 더미 데이터인 경우 시뮬레이션 수행
+        if wifi_data and not is_real_scan:
+            result = security_service.simulate_security_check(protocol)
             return jsonify({
                 'success': True,
-                'cracking_id': cracking_id,
-                'message': '크래킹을 시작했습니다.'
+                'result': result
             })
+        
+        # 실제 스캔 데이터인 경우에만 크래킹 시작
+        if wifi_data and is_real_scan:
+            try:
+                cracking_id = cracking_service.start_cracking(
+                    wifi_data,
+                    interface=Config.WIFI_INTERFACE
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'cracking_id': cracking_id,
+                    'message': '크래킹을 시작했습니다.'
+                })
+            except Exception as crack_error:
+                # 크래킹 시작 실패 시 시뮬레이션으로 폴백
+                print(f"크래킹 시작 실패, 시뮬레이션으로 폴백: {crack_error}")
+                result = security_service.simulate_security_check(protocol)
+                return jsonify({
+                    'success': True,
+                    'result': result
+                })
         else:
             # WiFi 데이터가 없으면 시뮬레이션만 수행
             result = security_service.simulate_security_check(protocol)
