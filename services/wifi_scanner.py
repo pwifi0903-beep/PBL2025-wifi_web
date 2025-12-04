@@ -212,15 +212,45 @@ class WiFiScanner:
             time.sleep(self.scan_duration)
             
             print(f"[10단계] airodump-ng 프로세스 종료 중...")
-            # 프로세스 종료
-            process.terminate()
+            # 프로세스 강제 종료 (airodump-ng는 종료 신호에 잘 응답하지 않으므로 확실한 방법 사용)
             try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+                # 먼저 SIGTERM 시도
+                process.terminate()
+                # 짧은 대기 (0.5초)
+                time.sleep(0.5)
+                
+                # 프로세스 상태 확인 (poll()은 즉시 반환, None이면 실행 중)
+                if process.poll() is None:
+                    # 아직 실행 중이면 즉시 SIGKILL
+                    print(f"  - 프로세스 강제 종료 중...")
+                    process.kill()
+                    # kill 후 짧은 대기
+                    time.sleep(0.5)
+                
+                # 최종 확인
+                return_code = process.poll()
+                if return_code is None:
+                    print(f"  - 경고: 프로세스 종료 확인 실패, 계속 진행...")
+                else:
+                    print(f"  - 프로세스 종료 완료 (반환 코드: {return_code})")
+            except Exception as e:
+                print(f"  - 프로세스 종료 오류: {e}, 강제 종료 시도...")
+                try:
+                    process.kill()
+                    time.sleep(0.5)
+                except:
+                    pass
             
-            # stderr 확인
-            stderr_output = process.stderr.read() if process.stderr else ""
+            # stderr 확인 (프로세스 종료 후, 블로킹 방지)
+            stderr_output = ""
+            try:
+                if process.stderr:
+                    # 프로세스가 종료되었으므로 읽기 시도
+                    stderr_output = process.stderr.read()
+            except Exception as e:
+                # stderr 읽기 실패는 무시 (프로세스가 이미 종료되었을 수 있음)
+                pass
+            
             if stderr_output:
                 print(f"[경고] airodump-ng stderr:\n{stderr_output}")
             
