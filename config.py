@@ -12,8 +12,8 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)
     
     # WiFi 스캔 설정
-    WIFI_INTERFACE = os.environ.get('WIFI_INTERFACE') or None  # None이면 자동 감지
-    WIFI_SCAN_DURATION = int(os.environ.get('WIFI_SCAN_DURATION', 15))  # 스캔 지속 시간 (초)
+    WIFI_INTERFACE = os.environ.get('WIFI_INTERFACE') or 'wlan0'  # wlan0으로 고정
+    WIFI_SCAN_DURATION = int(os.environ.get('WIFI_SCAN_DURATION', 5))  # 스캔 지속 시간 5초
     
     # 크래킹 설정
     CRACKING_WORDLIST_PATH = os.environ.get('CRACKING_WORDLIST_PATH') or '/usr/share/wordlists/rockyou.txt'
