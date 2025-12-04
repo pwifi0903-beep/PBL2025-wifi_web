@@ -230,10 +230,17 @@ class WiFiScanner:
                 else:
                     print(f"  - 프로세스 종료 완료 (반환 코드: {return_code})")
                     
-                    # 반환 코드가 0이 아니면 오류 - CSV 파일이 생성되지 않았을 가능성
-                    if return_code != 0:
+                    # 반환 코드 확인 (-15는 SIGTERM, -9는 SIGKILL - 정상 종료)
+                    # 0이 아니고 양수면 오류, 음수는 신호로 종료된 것 (정상)
+                    if return_code != 0 and return_code > 0:
                         print(f"  - 오류: airodump-ng가 오류 코드 {return_code}로 종료되었습니다.")
                         print(f"  - CSV 파일이 생성되지 않았을 수 있습니다.")
+                    elif return_code < 0:
+                        # 음수는 신호로 종료된 것 (정상 종료)
+                        signal_name = abs(return_code)
+                        signal_names = {15: "SIGTERM", 9: "SIGKILL"}
+                        signal_desc = signal_names.get(signal_name, f"신호 {signal_name}")
+                        print(f"  - 프로세스가 {signal_desc}로 종료됨 (정상 종료)")
             except Exception as e:
                 print(f"  - 프로세스 종료 오류: {e}, 강제 종료 시도...")
                 try:
@@ -282,8 +289,8 @@ class WiFiScanner:
                     print(f"  - 참고: ioctl 오류는 --ignore-negative-one 옵션으로 무시됩니다.")
             
             # CSV 파일이 생성될 때까지 짧은 대기 (파일 시스템 동기화)
-            print(f"  - CSV 파일 생성 대기 중... (0.5초)")
-            time.sleep(0.5)
+            print(f"  - CSV 파일 생성 대기 중... (1초)")
+            time.sleep(1.0)  # 파일 flush 시간 확보
             
             # CSV 파일 찾기
             print(f"[10단계] CSV 파일 확인 중...")
