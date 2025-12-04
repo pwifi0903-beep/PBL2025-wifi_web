@@ -68,7 +68,83 @@ class WiFiDataGenerator:
             "security_level": "critical"
         })
         
+        # SWU WiFi 데이터 추가 (사용자용 간소화)
+        swu_wifi_user = self._generate_swu_wifi_user()
+        wifi_list.extend(swu_wifi_user)
+        
         return wifi_list
+    
+    def _generate_swu_wifi_user(self) -> List[Dict[str, Any]]:
+        """SWU WiFi 사용자용 데이터 생성 - TP-LINK 먼저, 나머지는 섞어서"""
+        result_list = []
+        
+        # TP-LINK_AD43 (OPEN) - Cafe_WiFi 바로 다음에 표시 (맨 위)
+        result_list.append({
+            "ssid": "TP-LINK_AD43",
+            "protocol": "OPEN",
+            "security_level": "critical",
+            "is_new_data": True
+        })
+        
+        # TP-LINK_AD43 (WPA2) - KRACK 취약 (두 번째)
+        result_list.append({
+            "ssid": "TP-LINK_AD43",
+            "protocol": "WPA2",
+            "security_level": "safe",
+            "is_new_data": True,
+            "krack_vulnerable": True
+        })
+        
+        # 나머지 데이터는 섞어서 배치
+        # SWU_WiFi(Auth)_5G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_5G",
+            "protocol": "WPA2",
+            "security_level": "safe",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi_Help (OPEN)
+        result_list.append({
+            "ssid": "SWU_WiFi_Help",
+            "protocol": "OPEN",
+            "security_level": "critical",
+            "is_new_data": True
+        })
+        
+        # swu-vrlab (WPA2 PSK)
+        result_list.append({
+            "ssid": "swu-vrlab",
+            "protocol": "WPA2",
+            "security_level": "safe",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth)_2.4G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_2.4G",
+            "protocol": "WPA2",
+            "security_level": "safe",
+            "is_new_data": True
+        })
+        
+        # DIRECT-11 C56x Series (WPA2 PSK)
+        result_list.append({
+            "ssid": "DIRECT-11 C56x Series",
+            "protocol": "WPA2",
+            "security_level": "safe",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth) (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)",
+            "protocol": "WPA2",
+            "security_level": "safe",
+            "is_new_data": True
+        })
+        
+        return result_list
     
     def generate_expert_wifi_list(self) -> List[Dict[str, Any]]:
         """관리자용 와이파이 목록 생성 (상세 정보) - 프로토콜별 고정"""
@@ -150,7 +226,333 @@ class WiFiDataGenerator:
             "encryption": "없음"
         })
         
+        # SWU WiFi 데이터 추가 (관리자용 상세)
+        swu_wifi_expert = self._generate_swu_wifi_expert()
+        wifi_list.extend(swu_wifi_expert)
+        
         return wifi_list
+    
+    def _generate_swu_wifi_expert(self) -> List[Dict[str, Any]]:
+        """SWU WiFi 관리자용 상세 데이터 생성 - TP-LINK 먼저, 나머지는 섞어서"""
+        result_list = []
+        
+        # TP-LINK_AD43 (OPEN) - Cafe_WiFi 바로 다음에 표시 (맨 위)
+        result_list.append({
+            "ssid": "TP-LINK_AD43",
+            "bssid": "98:DE:D0:C4:AD:43",
+            "protocol": "OPEN",
+            "channel": 6,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -21,
+            "encryption": "없음",
+            "is_new_data": True
+        })
+        
+        # TP-LINK_AD43 (WPA2) - KRACK 취약 (두 번째)
+        result_list.append({
+            "ssid": "TP-LINK_AD43",
+            "bssid": "98:DE:D0:C4:AD:44",
+            "protocol": "WPA2",
+            "channel": 6,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -21,
+            "encryption": "WPA2-CCMP",
+            "is_new_data": True,
+            "krack_vulnerable": True
+        })
+        
+        # 나머지 데이터는 섞어서 배치 (고정된 섞인 순서)
+        # SWU_WiFi_Help (OPEN)
+        result_list.append({
+            "ssid": "SWU_WiFi_Help",
+            "bssid": "60:10:9E:C0:8C:13",
+            "protocol": "OPEN",
+            "channel": 11,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -40,
+            "encryption": "없음",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth)_5G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_5G",
+            "bssid": "60:10:9E:C0:8C:12",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -39,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # swu-vrlab (WPA2 PSK)
+        result_list.append({
+            "ssid": "swu-vrlab",
+            "bssid": "60:10:9E:C0:8C:14",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -41,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "PSK",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth)_2.4G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_2.4G",
+            "bssid": "60:10:9E:C0:8C:11",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -41,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi_Help (OPEN)
+        result_list.append({
+            "ssid": "SWU_WiFi_Help",
+            "bssid": "F8:B1:32:BD:C1:63",
+            "protocol": "OPEN",
+            "channel": 1,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -65,
+            "encryption": "없음",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth) (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)",
+            "bssid": "60:10:9E:C0:8C:10",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -41,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # swu-vrlab (WPA2 PSK)
+        result_list.append({
+            "ssid": "swu-vrlab",
+            "bssid": "60:10:9E:C0:C5:34",
+            "protocol": "WPA2",
+            "channel": 6,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -68,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "PSK",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi_Help (OPEN)
+        result_list.append({
+            "ssid": "SWU_WiFi_Help",
+            "bssid": "60:10:9E:C0:C5:33",
+            "protocol": "OPEN",
+            "channel": 6,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -67,
+            "encryption": "없음",
+            "is_new_data": True
+        })
+        
+        # swu-vrlab (WPA2 PSK)
+        result_list.append({
+            "ssid": "swu-vrlab",
+            "bssid": "60:10:9E:C0:BB:B4",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -77,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "PSK",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth)_5G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_5G",
+            "bssid": "60:10:9E:C0:BB:B2",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -77,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi_Help (OPEN)
+        result_list.append({
+            "ssid": "SWU_WiFi_Help",
+            "bssid": "60:10:9E:C0:BB:B3",
+            "protocol": "OPEN",
+            "channel": 11,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -75,
+            "encryption": "없음",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth) (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)",
+            "bssid": "60:10:9E:C0:BB:B0",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -77,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # swu-vrlab (WPA2 PSK)
+        result_list.append({
+            "ssid": "swu-vrlab",
+            "bssid": "60:10:9E:C0:87:B4",
+            "protocol": "WPA2",
+            "channel": 6,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -69,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "PSK",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi_Help (OPEN)
+        result_list.append({
+            "ssid": "SWU_WiFi_Help",
+            "bssid": "60:10:9E:C0:87:B3",
+            "protocol": "OPEN",
+            "channel": 6,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -70,
+            "encryption": "없음",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth)_2.4G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_2.4G",
+            "bssid": "60:10:9E:C0:BB:B1",
+            "protocol": "WPA2",
+            "channel": 11,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -77,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # DIRECT-11 C56x Series (WPA2 PSK)
+        result_list.append({
+            "ssid": "DIRECT-11 C56x Series",
+            "bssid": "86:25:19:C7:DD:11",
+            "protocol": "WPA2",
+            "channel": 1,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -85,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "PSK",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth) (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)",
+            "bssid": "C4:34:5B:FA:7C:10",
+            "protocol": "WPA2",
+            "channel": 1,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -82,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi_Help (OPEN)
+        result_list.append({
+            "ssid": "SWU_WiFi_Help",
+            "bssid": "C4:34:5B:FA:7C:13",
+            "protocol": "OPEN",
+            "channel": 1,
+            "security_level": "critical",
+            "vulnerabilities": ["무제한 접근", "데이터 도청 위험", "중간자 공격 가능", "패킷 스니핑 위험"],
+            "signal_strength": -82,
+            "encryption": "없음",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth)_5G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_5G",
+            "bssid": "C4:34:5B:FA:7C:12",
+            "protocol": "WPA2",
+            "channel": 1,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -78,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        # swu-vrlab (WPA2 PSK)
+        result_list.append({
+            "ssid": "swu-vrlab",
+            "bssid": "C4:34:5B:FA:7C:14",
+            "protocol": "WPA2",
+            "channel": 1,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -80,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "PSK",
+            "is_new_data": True
+        })
+        
+        # SWU_WiFi(Auth)_2.4G (WPA2 MGT)
+        result_list.append({
+            "ssid": "SWU_WiFi(Auth)_2.4G",
+            "bssid": "C4:34:5B:FA:7C:11",
+            "protocol": "WPA2",
+            "channel": 1,
+            "security_level": "safe",
+            "vulnerabilities": [],
+            "signal_strength": -82,
+            "encryption": "WPA2-CCMP",
+            "auth_type": "MGT",
+            "is_new_data": True
+        })
+        
+        return result_list
     
     def _get_encryption_type(self, protocol: str) -> str:
         """프로토콜에 따른 암호화 타입 반환"""

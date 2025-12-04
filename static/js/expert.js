@@ -283,7 +283,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 실제 스캔 데이터인지 확인
             const isRealScan = wifi.is_real_scan === true;
-            const scanBadge = isRealScan ? '<span class="scan-badge">실제 스캔</span>' : '<span class="scan-badge dummy">시뮬레이션</span>';
+            const isNewData = wifi.is_new_data === true;
+            // 실제 스캔이면 "실제 스캔" 배지, 신규 데이터면 배지 없음, 기존 더미면 "시뮬레이션" 배지
+            let scanBadge = '';
+            if (isRealScan) {
+                scanBadge = '<span class="scan-badge">실제 스캔</span>';
+            } else if (!isNewData) {
+                scanBadge = '<span class="scan-badge dummy">시뮬레이션</span>';
+            }
             
             return `
             <div class="wifi-item-expert" data-index="${index}">
@@ -438,6 +445,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="btn-icon">🛡️</span>
                         보안 점검
                     </button>
+                    ${wifiData.protocol.toUpperCase() === 'WPA2' ? `
+                    <button id="krackCheckBtn" class="btn btn-warning btn-large">
+                        <span class="btn-icon">🔓</span>
+                        KRACK 점검
+                    </button>
+                    ` : ''}
                     <button id="confirmBtn" class="btn btn-safe btn-large">
                         <span class="btn-icon">✅</span>
                         확인
@@ -452,6 +465,16 @@ document.addEventListener('DOMContentLoaded', function() {
             securityCheckBtn.addEventListener('click', function() {
                 if (currentWifiData) {
                     performSecurityCheck(currentWifiData);
+                }
+            });
+        }
+        
+        // KRACK 점검 버튼 이벤트
+        const krackCheckBtn = document.getElementById('krackCheckBtn');
+        if (krackCheckBtn) {
+            krackCheckBtn.addEventListener('click', function() {
+                if (currentWifiData) {
+                    performKrackCheck(currentWifiData);
                 }
             });
         }
@@ -525,6 +548,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 더미 데이터인지 확인
         const isRealScan = wifiData.is_real_scan === true;
+        // 신규 데이터인지 확인 (SWU WiFi 등)
+        const isNewData = wifiData.is_new_data === true;
         
         if (isRealScan) {
             // 실제 스캔 데이터인 경우 크래킹 시작
@@ -556,8 +581,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 showAlert('네트워크 오류가 발생했습니다.', 'error');
                 securityCheckProgress.style.display = 'none';
             });
+        } else if (isNewData) {
+            // 신규 데이터인 경우 패킷 수집 시뮬레이션 (30초 동안 10-20%까지 진행 후 예상 시간 표시)
+            performPacketCaptureSimulation(wifiData);
         } else {
-            // 더미 데이터인 경우 이전처럼 시뮬레이션 진행 애니메이션
+            // 기존 더미 데이터인 경우 이전처럼 시뮬레이션 진행 애니메이션 (5초)
             const steps = [
                 '1/4 보안 설정 확인 중...',
                 '2/4 약한 암호화 확인 중...',
@@ -611,6 +639,205 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }, 1250); // 5초 / 4단계 = 1.25초씩
         }
+    }
+    
+    // 패킷 수집 시뮬레이션 (신규 데이터용 - 30초 동안 진행 후 예상 시간 표시)
+    function performPacketCaptureSimulation(wifiData) {
+        const captureSteps = [
+            { message: '모니터 모드 전환 중...', progress: 2, duration: 2500 },
+            { message: `채널 ${wifiData.channel || 6} 설정 중...`, progress: 4, duration: 2500 },
+            { message: '패킷 수집 시작...', progress: 6, duration: 3000 },
+            { message: '핸드셰이크 패킷 대기 중...', progress: 8, duration: 4000 },
+            { message: '데이터 패킷 수집 중...', progress: 10, duration: 3500 },
+            { message: '데이터 패킷 수집 중...', progress: 12, duration: 3500 },
+            { message: '데이터 패킷 수집 중...', progress: 14, duration: 4000 },
+            { message: '데이터 패킷 수집 중...', progress: 16, duration: 4000 },
+            { message: '데이터 패킷 수집 중...', progress: 18, duration: 4000 },
+            { message: '핸드셰이크 캡처 대기 중... (클라이언트 연결 필요)', progress: 20, duration: 4000 }
+        ];
+        
+        let stepIndex = 0;
+        
+        function runStep() {
+            if (stepIndex < captureSteps.length) {
+                const step = captureSteps[stepIndex];
+                progressFill.style.width = `${step.progress}%`;
+                progressText.textContent = step.message;
+                stepIndex++;
+                setTimeout(runStep, step.duration);
+            } else {
+                // 30초 후 예상 시간 표시하고 진행 중 상태 유지
+                progressFill.style.width = '20%';
+                progressText.innerHTML = `
+                    <div class="long-process-info">
+                        <div class="process-status">패킷 수집 진행 중...</div>
+                        <div class="process-estimate">패킷 수집 속도에 따라 <strong>최소 3시간</strong>에서 수시간 이상 소요될 수 있습니다.</div>
+                        <button class="btn btn-small btn-cancel" onclick="cancelSecurityCheck()">취소</button>
+                    </div>
+                `;
+            }
+        }
+        
+        runStep();
+    }
+    
+    // 보안 점검 취소
+    window.cancelSecurityCheck = function() {
+        if (progressPollInterval) {
+            clearInterval(progressPollInterval);
+            progressPollInterval = null;
+        }
+        securityCheckProgress.style.display = 'none';
+        showAlert('보안 점검이 취소되었습니다.', 'warning');
+    };
+    
+    // KRACK 점검 수행
+    function performKrackCheck(wifiData) {
+        if (wifiData.protocol.toUpperCase() !== 'WPA2') {
+            showAlert('KRACK 점검은 WPA2 네트워크에서만 수행할 수 있습니다.', 'warning');
+            return;
+        }
+        
+        // 진행 표시 시작
+        securityCheckProgress.style.display = 'flex';
+        progressFill.style.width = '0%';
+        progressText.textContent = 'KRACK 취약점 점검을 시작합니다...';
+        
+        // 신규 데이터인지 확인
+        const isNewData = wifiData.is_new_data === true;
+        
+        if (isNewData) {
+            // 신규 데이터인 경우 30초 동안 진행 후 예상 시간 표시
+            performKrackSimulationLong(wifiData);
+        } else {
+            // 기존 더미 데이터인 경우 5초 내 결과 표시
+            performKrackSimulationShort(wifiData);
+        }
+    }
+    
+    // KRACK 점검 시뮬레이션 (기존 데이터용 - 5초)
+    function performKrackSimulationShort(wifiData) {
+        const steps = [
+            { message: '1/4 KRACK 취약점 스캔 준비 중...', progress: 25 },
+            { message: '2/4 4-way 핸드셰이크 분석 중...', progress: 50 },
+            { message: '3/4 키 재설치 공격 테스트 중...', progress: 75 },
+            { message: '4/4 분석 완료 중...', progress: 100 }
+        ];
+        
+        let currentStep = 0;
+        const stepInterval = setInterval(() => {
+            if (currentStep < steps.length) {
+                const step = steps[currentStep];
+                progressFill.style.width = `${step.progress}%`;
+                progressText.textContent = step.message;
+                currentStep++;
+            } else {
+                clearInterval(stepInterval);
+                
+                // KRACK 점검 API 호출
+                fetchWithAuth('/api/expert/krack-check', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        wifi_data: wifiData,
+                        ssid: wifiData.ssid
+                    })
+                })
+                .then(response => {
+                    if (!response) return null;
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        showKrackResult(data.result, wifiData);
+                    } else {
+                        showAlert('KRACK 점검 중 오류가 발생했습니다: ' + (data.error || '알 수 없는 오류'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('네트워크 오류가 발생했습니다.', 'error');
+                })
+                .finally(() => {
+                    setTimeout(() => {
+                        securityCheckProgress.style.display = 'none';
+                    }, 2000);
+                });
+            }
+        }, 1250); // 5초 / 4단계 = 1.25초씩
+    }
+    
+    // KRACK 점검 시뮬레이션 (신규 데이터용 - 30초 후 예상 시간 표시)
+    function performKrackSimulationLong(wifiData) {
+        const krackSteps = [
+            { message: 'KRACK 점검 준비 중...', progress: 2, duration: 2000 },
+            { message: '모니터 모드 전환 중...', progress: 4, duration: 2000 },
+            { message: `타겟 AP 설정 중... (${wifiData.ssid})`, progress: 6, duration: 2000 },
+            { message: '4-way 핸드셰이크 캡처 대기 중...', progress: 8, duration: 4000 },
+            { message: 'PTK 재설치 테스트 준비 중...', progress: 10, duration: 3000 },
+            { message: '키 재설치 공격 시뮬레이션 중...', progress: 12, duration: 4000 },
+            { message: 'GTK 재설치 테스트 중...', progress: 14, duration: 4000 },
+            { message: 'IGTK 재설치 테스트 중...', progress: 16, duration: 3000 },
+            { message: '추가 핸드셰이크 수집 중...', progress: 18, duration: 3000 },
+            { message: '취약점 분석 중...', progress: 20, duration: 3000 }
+        ];
+        
+        let stepIndex = 0;
+        
+        function runStep() {
+            if (stepIndex < krackSteps.length) {
+                const step = krackSteps[stepIndex];
+                progressFill.style.width = `${step.progress}%`;
+                progressText.textContent = step.message;
+                stepIndex++;
+                setTimeout(runStep, step.duration);
+            } else {
+                // 30초 후 예상 시간 표시하고 진행 중 상태 유지
+                progressFill.style.width = '20%';
+                progressText.innerHTML = `
+                    <div class="long-process-info">
+                        <div class="process-status">KRACK 취약점 점검 진행 중...</div>
+                        <div class="process-estimate">패킷 수집 속도에 따라 <strong>최소 3시간</strong>에서 수시간 이상 소요될 수 있습니다.</div>
+                        <button class="btn btn-small btn-cancel" onclick="cancelSecurityCheck()">취소</button>
+                    </div>
+                `;
+            }
+        }
+        
+        runStep();
+    }
+    
+    // KRACK 점검 결과 표시
+    function showKrackResult(result, wifiData) {
+        const isVulnerable = result.vulnerable;
+        
+        // WiFi 데이터에 KRACK 점검 상태 저장
+        if (currentWifiData) {
+            currentWifiData.krack_checked = true;
+            currentWifiData.krack_vulnerable = isVulnerable;
+        }
+        
+        // WiFi 목록 업데이트
+        updateWifiListKrackStatus();
+        
+        if (isVulnerable) {
+            showAlert(`⚠️ KRACK 취약점 발견!\n\nSSID: ${wifiData.ssid}\n\n이 네트워크는 KRACK(Key Reinstallation Attack) 공격에 취약합니다.\n\n권고사항:\n• 라우터 펌웨어 업데이트 필요\n• WPA3로 업그레이드 권고\n• 패치가 적용될 때까지 민감한 작업 자제`, 'error');
+        } else {
+            showAlert(`✅ KRACK 취약점 없음\n\nSSID: ${wifiData.ssid}\n\n이 네트워크는 KRACK 공격에 대해 안전합니다.\n\n펌웨어가 최신 상태이거나 패치가 적용되어 있습니다.`, 'success');
+        }
+    }
+    
+    // WiFi 목록에서 KRACK 상태 업데이트
+    function updateWifiListKrackStatus() {
+        const wifiItems = document.querySelectorAll('.wifi-item-expert');
+        wifiItems.forEach(item => {
+            const index = parseInt(item.dataset.index);
+            if (wifiDataList[index] && currentWifiData && 
+                wifiDataList[index].ssid === currentWifiData.ssid &&
+                wifiDataList[index].bssid === currentWifiData.bssid) {
+                wifiDataList[index].krack_checked = currentWifiData.krack_checked;
+                wifiDataList[index].krack_vulnerable = currentWifiData.krack_vulnerable;
+            }
+        });
     }
     
     function startProgressPolling(crackingId) {

@@ -4,11 +4,33 @@
     min-height: 100vh;
 }
 
-/* 전문가 페이지 sidebar 높이 제한 */
+/* 전문가 페이지 sidebar 높이 제한 - 오른쪽 상세 정보 칸과 높이 맞춤 */
 .expert-container .sidebar {
-    max-height: calc(100vh - 300px);
+    height: 100%;
+    max-height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
+    flex: 1;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+/* 메인 레이아웃에서 양쪽 칸 높이 동기화 */
+.expert-container .main-layout {
+    align-items: stretch;
+    min-height: calc(100vh - 250px);
+}
+
+.expert-container .content {
+    height: 100%;
+    max-height: 100%;
+}
+
+/* WiFi 목록 영역이 sidebar를 꽉 채우도록 */
+.expert-container .wifi-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 20px;
 }
 
 /* 스캔 섹션 */
@@ -1182,4 +1204,99 @@
 
 .scan-badge.dummy {
     background: #6b7280;
+}
+
+/* KRACK 점검 버튼 스타일 */
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+}
+
+/* 장시간 진행 상태 스타일 */
+.long-process-info {
+    text-align: center;
+    padding: 10px 0;
+}
+
+.long-process-info .process-status {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.long-process-info .process-estimate {
+    font-size: 1.1rem;
+    color: var(--warning-color);
+    margin-bottom: 8px;
+}
+
+.long-process-info .process-estimate strong {
+    color: #f59e0b;
+    font-size: 1.3rem;
+}
+
+.long-process-info .process-detail {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.btn-cancel {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+}
+
+/* 신규 데이터 배지 */
+.scan-badge.new-data {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+/* KRACK 취약 표시 */
+.krack-status {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-top: 4px;
+}
+
+.krack-status.vulnerable {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid #ef4444;
+}
+
+.krack-status.safe {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border: 1px solid #22c55e;
+}
+
+.krack-status.unchecked {
+    background: rgba(107, 114, 128, 0.2);
+    color: #6b7280;
+    border: 1px solid #6b7280;
 }

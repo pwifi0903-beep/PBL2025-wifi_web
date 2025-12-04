@@ -282,6 +282,67 @@ def cracking_progress():
             'error': str(e)
         }), 500
 
+@expert_bp.route('/api/expert/krack-check', methods=['POST'])
+@login_required
+def krack_check():
+    """KRACK 취약점 점검 API"""
+    try:
+        data = request.get_json()
+        wifi_data = data.get('wifi_data')
+        ssid = data.get('ssid')
+        
+        if not wifi_data and not ssid:
+            return jsonify({
+                'success': False,
+                'error': 'WiFi 정보가 필요합니다.'
+            }), 400
+        
+        # SSID 추출
+        if not ssid and wifi_data:
+            ssid = wifi_data.get('ssid', '')
+        
+        # 프로토콜 확인
+        protocol = wifi_data.get('protocol', '') if wifi_data else ''
+        if protocol.upper() != 'WPA2':
+            return jsonify({
+                'success': False,
+                'error': 'KRACK 점검은 WPA2 네트워크에서만 수행할 수 있습니다.'
+            }), 400
+        
+        # KRACK 취약 여부 판단
+        # TP-LINK_AD43만 취약, 나머지는 안전
+        is_vulnerable = False
+        if ssid == 'TP-LINK_AD43':
+            is_vulnerable = True
+        
+        # wifi_data에 krack_vulnerable 플래그가 있으면 그것을 사용
+        if wifi_data and wifi_data.get('krack_vulnerable') == True:
+            is_vulnerable = True
+        
+        result = {
+            'vulnerable': is_vulnerable,
+            'ssid': ssid,
+            'message': 'KRACK 공격에 취약합니다.' if is_vulnerable else 'KRACK 공격에 안전합니다.',
+            'recommendations': [
+                '라우터 펌웨어 업데이트 필요',
+                'WPA3로 업그레이드 권고',
+                '패치가 적용될 때까지 민감한 작업 자제'
+            ] if is_vulnerable else [
+                '펌웨어가 최신 상태입니다.',
+                '정기적인 보안 업데이트 유지 권고'
+            ]
+        }
+        
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @expert_bp.route('/api/expert/verify', methods=['GET'])
 @jwt_required
 def verify():
