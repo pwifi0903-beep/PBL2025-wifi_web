@@ -6,6 +6,7 @@ import threading
 from typing import Dict, Any, Optional, Generator
 from pathlib import Path
 import json
+from config import Config
 
 class CrackingService:
     """프로토콜별 WiFi 크래킹 서비스"""
@@ -105,10 +106,10 @@ class CrackingService:
             os.makedirs(output_dir, exist_ok=True)
             cap_file = os.path.join(output_dir, "wep_capture")
             
-            # airodump-ng 실행 (30초 동안 IV 수집)
+            # airodump-ng 실행 (30초 동안 IV 수집, sudo 비밀번호 자동 입력)
             airodump_process = subprocess.Popen(
-                ['sudo', 'airodump-ng', '-c', str(channel), '--bssid', bssid, 
-                 '-w', cap_file, '--output-format', 'cap', interface],
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng -c {channel} --bssid {bssid} -w {cap_file} --output-format cap {interface}",
+                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
@@ -143,9 +144,10 @@ class CrackingService:
             
             cap_file_path = os.path.join(output_dir, cap_files[0])
             
-            # aircrack-ng 실행
+            # aircrack-ng 실행 (sudo 비밀번호 자동 입력)
             aircrack_process = subprocess.Popen(
-                ['sudo', 'aircrack-ng', cap_file_path],
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S aircrack-ng {cap_file_path}",
+                shell=True,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -272,10 +274,10 @@ class CrackingService:
             os.makedirs(output_dir, exist_ok=True)
             cap_file = os.path.join(output_dir, "wpa_capture")
             
-            # airodump-ng 실행
+            # airodump-ng 실행 (sudo 비밀번호 자동 입력)
             airodump_process = subprocess.Popen(
-                ['sudo', 'airodump-ng', '-c', str(channel), '--bssid', bssid, 
-                 '-w', cap_file, '--output-format', 'cap', interface],
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng -c {channel} --bssid {bssid} -w {cap_file} --output-format cap {interface}",
+                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
@@ -318,9 +320,10 @@ class CrackingService:
                 'step': 'dictionary_attack'
             }
             
-            # aircrack-ng로 사전 공격
+            # aircrack-ng로 사전 공격 (sudo 비밀번호 자동 입력)
             aircrack_process = subprocess.Popen(
-                ['sudo', 'aircrack-ng', '-w', self.wordlist_path, '-b', bssid, cap_file_path],
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S aircrack-ng -w {self.wordlist_path} -b {bssid} {cap_file_path}",
+                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True

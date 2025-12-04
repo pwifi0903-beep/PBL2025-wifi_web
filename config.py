@@ -14,6 +14,7 @@ class Config:
     # WiFi 스캔 설정
     WIFI_INTERFACE = os.environ.get('WIFI_INTERFACE') or 'wlan0'  # wlan0으로 고정
     WIFI_SCAN_DURATION = int(os.environ.get('WIFI_SCAN_DURATION', 5))  # 스캔 지속 시간 5초
+    SUDO_PASSWORD = os.environ.get('SUDO_PASSWORD') or 'kali'  # sudo 비밀번호
     
     # 크래킹 설정
     CRACKING_WORDLIST_PATH = os.environ.get('CRACKING_WORDLIST_PATH') or '/usr/share/wordlists/rockyou.txt'
