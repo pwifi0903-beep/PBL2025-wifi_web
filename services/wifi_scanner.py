@@ -139,9 +139,8 @@ class WiFiScanner:
         os.makedirs(self.scan_output_dir, exist_ok=True)
         print(f"[3단계] 출력 디렉토리: {self.scan_output_dir}")
         
-        # 이미 모니터 모드인지 확인
+        # 모니터 모드 인터페이스 확인 (간소화)
         self.monitor_interface = None
-        print("[4단계] 모니터 모드 확인 중...")
         try:
             result = subprocess.run(
                 ['iwconfig'],
@@ -149,38 +148,34 @@ class WiFiScanner:
                 text=True,
                 timeout=5
             )
-            print(f"iwconfig 출력:\n{result.stdout}")
             for line in result.stdout.split('\n'):
                 if 'Mode:Monitor' in line:
                     match = re.search(r'^(\w+)\s+', line)
                     if match:
                         self.monitor_interface = match.group(1)
-                        print(f"[성공] 이미 모니터 모드 활성화됨: {self.monitor_interface}")
+                        print(f"[4단계] 모니터 모드 인터페이스 확인: {self.monitor_interface}")
                         break
         except Exception as e:
-            print(f"[오류] 모니터 모드 확인 오류: {e}")
+            print(f"[경고] 모니터 모드 확인 오류: {e}")
         
         # 모니터 모드가 없으면 활성화 시도
         if not self.monitor_interface:
-            print("[5단계] 모니터 모드 활성화 시도 중...")
+            print("[4단계] 모니터 모드 활성화 시도 중...")
             self.monitor_interface = self.start_monitor_mode(self.interface)
             if self.monitor_interface:
                 print(f"[성공] 모니터 모드 활성화: {self.monitor_interface}")
             else:
                 print("[오류] 모니터 모드를 활성화할 수 없습니다.")
+                return []
         
-        if not self.monitor_interface:
-            print("[오류] 모니터 모드 인터페이스를 찾을 수 없습니다.")
-            return []
-        
-        print(f"[6단계] 사용할 모니터 인터페이스: {self.monitor_interface}")
+        print(f"[5단계] 사용할 모니터 인터페이스: {self.monitor_interface}")
         
         try:
             # airodump-ng 실행
             output_file = os.path.join(self.scan_output_dir, "scan")
             csv_file = f"{output_file}-01.csv"
             
-            print(f"[7단계] airodump-ng 실행 준비")
+            print(f"[6단계] airodump-ng 실행 준비")
             print(f"  - 출력 파일: {output_file}")
             print(f"  - 예상 CSV 파일: {csv_file}")
             
@@ -195,7 +190,7 @@ class WiFiScanner:
             
             # airodump-ng 실행 명령어
             cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng -w {output_file} --output-format csv {self.monitor_interface}"
-            print(f"[8단계] airodump-ng 실행 중...")
+            print(f"[7단계] airodump-ng 실행 중...")
             print(f"  - 명령어: airodump-ng -w {output_file} --output-format csv {self.monitor_interface}")
             
             # airodump-ng 실행 (백그라운드, sudo 비밀번호 자동 입력)
@@ -207,11 +202,11 @@ class WiFiScanner:
                 text=True
             )
             
-            print(f"[9단계] 스캔 대기 중... ({self.scan_duration}초)")
+            print(f"[8단계] 스캔 대기 중... ({self.scan_duration}초)")
             # 스캔 시간만큼 대기
             time.sleep(self.scan_duration)
             
-            print(f"[10단계] airodump-ng 프로세스 종료 중...")
+            print(f"[9단계] airodump-ng 프로세스 종료 중...")
             # 프로세스 강제 종료 (airodump-ng는 종료 신호에 잘 응답하지 않으므로 확실한 방법 사용)
             try:
                 # 먼저 SIGTERM 시도
@@ -254,47 +249,87 @@ class WiFiScanner:
             if stderr_output:
                 print(f"[경고] airodump-ng stderr:\n{stderr_output}")
             
-            # CSV 파일 찾기
-            print(f"[11단계] CSV 파일 확인 중...")
-            csv_files = glob.glob(f"{output_file}-*.csv")
-            print(f"  - 찾은 CSV 파일: {csv_files}")
+            # CSV 파일이 생성될 때까지 짧은 대기 (파일 시스템 동기화)
+            print(f"  - CSV 파일 생성 대기 중... (0.5초)")
+            time.sleep(0.5)
             
-            if csv_files:
+            # CSV 파일 찾기
+            print(f"[10단계] CSV 파일 확인 중...")
+            try:
+                csv_files = glob.glob(f"{output_file}-*.csv")
+                print(f"  - 찾은 CSV 파일: {csv_files}")
+                
+                if not csv_files:
+                    print(f"[오류] CSV 파일을 찾을 수 없습니다!")
+                    print(f"  - 검색 경로: {output_file}-*.csv")
+                    print(f"  - 디렉토리 내용:")
+                    try:
+                        dir_items = os.listdir(self.scan_output_dir)
+                        if dir_items:
+                            for item in dir_items:
+                                print(f"    - {item}")
+                        else:
+                            print(f"    - (디렉토리가 비어있음)")
+                    except Exception as e:
+                        print(f"    - 디렉토리 읽기 실패: {e}")
+                    return []
+                
                 # 가장 최근 파일 선택
                 csv_file = max(csv_files, key=os.path.getmtime)
                 print(f"  - 사용할 CSV 파일: {csv_file}")
-                print(f"  - 파일 크기: {os.path.getsize(csv_file)} bytes")
-            else:
-                print(f"[오류] CSV 파일을 찾을 수 없습니다!")
-                print(f"  - 검색 경로: {output_file}-*.csv")
-                print(f"  - 디렉토리 내용:")
+                
+                # 파일 크기 확인
                 try:
-                    for item in os.listdir(self.scan_output_dir):
-                        print(f"    - {item}")
+                    file_size = os.path.getsize(csv_file)
+                    print(f"  - 파일 크기: {file_size} bytes")
+                    if file_size == 0:
+                        print(f"[경고] CSV 파일이 비어있습니다!")
+                        return []
                 except Exception as e:
-                    print(f"    - 디렉토리 읽기 실패: {e}")
+                    print(f"[오류] 파일 크기 확인 실패: {e}")
+                    return []
+                    
+            except Exception as e:
+                print(f"[오류] CSV 파일 확인 중 오류 발생: {e}")
+                import traceback
+                traceback.print_exc()
                 return []
             
             # CSV 파일 내용 확인 (처음 20줄)
-            print(f"[12단계] CSV 파일 내용 확인 (처음 20줄):")
+            print(f"[11단계] CSV 파일 내용 확인 (처음 20줄):")
             try:
                 with open(csv_file, 'r', encoding='utf-8', errors='ignore') as f:
                     preview_lines = f.readlines()[:20]
-                    for i, line in enumerate(preview_lines, 1):
-                        print(f"  {i}: {line.strip()[:100]}")
+                    if preview_lines:
+                        for i, line in enumerate(preview_lines, 1):
+                            print(f"  {i}: {line.strip()[:100]}")
+                    else:
+                        print(f"  - 파일이 비어있습니다.")
             except Exception as e:
-                print(f"  - 파일 읽기 실패: {e}")
+                print(f"[오류] CSV 파일 읽기 실패: {e}")
+                import traceback
+                traceback.print_exc()
+                return []
             
             # CSV 파일 파싱
-            print(f"[13단계] CSV 파일 파싱 중...")
-            wifi_list = self.parse_airodump_csv(csv_file)
-            print(f"[14단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
-            
-            for i, wifi in enumerate(wifi_list, 1):
-                print(f"  {i}. {wifi.get('ssid', 'N/A')} ({wifi.get('bssid', 'N/A')}) - {wifi.get('protocol', 'N/A')}")
-            
-            print("=" * 50)
-            return wifi_list
+            print(f"[12단계] CSV 파일 파싱 중...")
+            try:
+                wifi_list = self.parse_airodump_csv(csv_file)
+                print(f"[13단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
+                
+                if wifi_list:
+                    for i, wifi in enumerate(wifi_list, 1):
+                        print(f"  {i}. {wifi.get('ssid', 'N/A')} ({wifi.get('bssid', 'N/A')}) - {wifi.get('protocol', 'N/A')}")
+                else:
+                    print(f"  - 파싱된 WiFi가 없습니다.")
+                
+                print("=" * 50)
+                return wifi_list
+            except Exception as e:
+                print(f"[오류] CSV 파일 파싱 중 오류 발생: {e}")
+                import traceback
+                traceback.print_exc()
+                return []
             
         except Exception as e:
             print(f"[오류] WiFi 스캔 오류: {e}")
