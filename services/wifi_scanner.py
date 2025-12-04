@@ -108,19 +108,30 @@ class WiFiScanner:
     
     def scan_wifi(self) -> List[Dict[str, Any]]:
         """실제 WiFi 스캔 수행"""
+        print("=" * 50)
+        print("[WiFi 스캔 시작]")
+        print(f"설정된 인터페이스: {self.interface}")
+        print(f"스캔 지속 시간: {self.scan_duration}초")
+        
         # 인터페이스 감지
         if not self.interface:
+            print("[1단계] WiFi 인터페이스 자동 감지 중...")
             self.interface = self.detect_wifi_interface()
+            print(f"감지된 인터페이스: {self.interface}")
         
         if not self.interface:
-            print("WiFi 인터페이스를 찾을 수 없습니다.")
+            print("[오류] WiFi 인터페이스를 찾을 수 없습니다.")
             return []
+        
+        print(f"[2단계] 사용할 인터페이스: {self.interface}")
         
         # 출력 디렉토리 생성
         os.makedirs(self.scan_output_dir, exist_ok=True)
+        print(f"[3단계] 출력 디렉토리: {self.scan_output_dir}")
         
         # 이미 모니터 모드인지 확인
         self.monitor_interface = None
+        print("[4단계] 모니터 모드 확인 중...")
         try:
             result = subprocess.run(
                 ['iwconfig'],
@@ -128,45 +139,69 @@ class WiFiScanner:
                 text=True,
                 timeout=5
             )
+            print(f"iwconfig 출력:\n{result.stdout}")
             for line in result.stdout.split('\n'):
                 if 'Mode:Monitor' in line:
                     match = re.search(r'^(\w+)\s+', line)
                     if match:
                         self.monitor_interface = match.group(1)
-                        print(f"이미 모니터 모드 활성화됨: {self.monitor_interface}")
+                        print(f"[성공] 이미 모니터 모드 활성화됨: {self.monitor_interface}")
                         break
         except Exception as e:
-            print(f"모니터 모드 확인 오류: {e}")
+            print(f"[오류] 모니터 모드 확인 오류: {e}")
         
         # 모니터 모드가 없으면 활성화 시도
         if not self.monitor_interface:
+            print("[5단계] 모니터 모드 활성화 시도 중...")
             self.monitor_interface = self.start_monitor_mode(self.interface)
+            if self.monitor_interface:
+                print(f"[성공] 모니터 모드 활성화: {self.monitor_interface}")
+            else:
+                print("[오류] 모니터 모드를 활성화할 수 없습니다.")
         
         if not self.monitor_interface:
-            print("모니터 모드를 활성화할 수 없습니다.")
+            print("[오류] 모니터 모드 인터페이스를 찾을 수 없습니다.")
             return []
+        
+        print(f"[6단계] 사용할 모니터 인터페이스: {self.monitor_interface}")
         
         try:
             # airodump-ng 실행
             output_file = os.path.join(self.scan_output_dir, "scan")
             csv_file = f"{output_file}-01.csv"
             
+            print(f"[7단계] airodump-ng 실행 준비")
+            print(f"  - 출력 파일: {output_file}")
+            print(f"  - 예상 CSV 파일: {csv_file}")
+            
             # 기존 파일 삭제
-            if os.path.exists(csv_file):
-                os.remove(csv_file)
+            import glob
+            for old_file in glob.glob(f"{output_file}*"):
+                try:
+                    os.remove(old_file)
+                    print(f"  - 기존 파일 삭제: {old_file}")
+                except Exception as e:
+                    print(f"  - 파일 삭제 실패: {e}")
+            
+            # airodump-ng 실행 명령어
+            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng -w {output_file} --output-format csv {self.monitor_interface}"
+            print(f"[8단계] airodump-ng 실행 중...")
+            print(f"  - 명령어: airodump-ng -w {output_file} --output-format csv {self.monitor_interface}")
             
             # airodump-ng 실행 (백그라운드, sudo 비밀번호 자동 입력)
             process = subprocess.Popen(
-                f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng -w {output_file} --output-format csv {self.monitor_interface}",
+                cmd,
                 shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
             )
             
+            print(f"[9단계] 스캔 대기 중... ({self.scan_duration}초)")
             # 스캔 시간만큼 대기
             time.sleep(self.scan_duration)
             
+            print(f"[10단계] airodump-ng 프로세스 종료 중...")
             # 프로세스 종료
             process.terminate()
             try:
@@ -174,31 +209,77 @@ class WiFiScanner:
             except subprocess.TimeoutExpired:
                 process.kill()
             
-            # CSV 파일 파싱
-            wifi_list = self.parse_airodump_csv(csv_file)
+            # stderr 확인
+            stderr_output = process.stderr.read() if process.stderr else ""
+            if stderr_output:
+                print(f"[경고] airodump-ng stderr:\n{stderr_output}")
             
+            # CSV 파일 찾기
+            print(f"[11단계] CSV 파일 확인 중...")
+            csv_files = glob.glob(f"{output_file}-*.csv")
+            print(f"  - 찾은 CSV 파일: {csv_files}")
+            
+            if csv_files:
+                # 가장 최근 파일 선택
+                csv_file = max(csv_files, key=os.path.getmtime)
+                print(f"  - 사용할 CSV 파일: {csv_file}")
+                print(f"  - 파일 크기: {os.path.getsize(csv_file)} bytes")
+            else:
+                print(f"[오류] CSV 파일을 찾을 수 없습니다!")
+                print(f"  - 검색 경로: {output_file}-*.csv")
+                print(f"  - 디렉토리 내용:")
+                try:
+                    for item in os.listdir(self.scan_output_dir):
+                        print(f"    - {item}")
+                except Exception as e:
+                    print(f"    - 디렉토리 읽기 실패: {e}")
+                return []
+            
+            # CSV 파일 내용 확인 (처음 20줄)
+            print(f"[12단계] CSV 파일 내용 확인 (처음 20줄):")
+            try:
+                with open(csv_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    preview_lines = f.readlines()[:20]
+                    for i, line in enumerate(preview_lines, 1):
+                        print(f"  {i}: {line.strip()[:100]}")
+            except Exception as e:
+                print(f"  - 파일 읽기 실패: {e}")
+            
+            # CSV 파일 파싱
+            print(f"[13단계] CSV 파일 파싱 중...")
+            wifi_list = self.parse_airodump_csv(csv_file)
+            print(f"[14단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
+            
+            for i, wifi in enumerate(wifi_list, 1):
+                print(f"  {i}. {wifi.get('ssid', 'N/A')} ({wifi.get('bssid', 'N/A')}) - {wifi.get('protocol', 'N/A')}")
+            
+            print("=" * 50)
             return wifi_list
             
         except Exception as e:
-            print(f"WiFi 스캔 오류: {e}")
+            print(f"[오류] WiFi 스캔 오류: {e}")
+            import traceback
+            traceback.print_exc()
             return []
         finally:
             # 모니터 모드는 유지 (다음 스캔을 위해)
-            # 필요시 주석 해제하여 비활성화
-            # if self.monitor_interface:
-            #     self.stop_monitor_mode(self.monitor_interface)
             pass
     
     def parse_airodump_csv(self, csv_file: str) -> List[Dict[str, Any]]:
         """airodump-ng CSV 파일 파싱"""
         wifi_list = []
         
+        print(f"[CSV 파싱] 파일: {csv_file}")
+        
         if not os.path.exists(csv_file):
+            print(f"[CSV 파싱 오류] 파일이 존재하지 않습니다: {csv_file}")
             return wifi_list
         
         try:
             with open(csv_file, 'r', encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
+            
+            print(f"[CSV 파싱] 총 라인 수: {len(lines)}")
             
             # CSV 헤더 찾기
             header_line = None
@@ -208,22 +289,37 @@ class WiFiScanner:
                 if 'BSSID' in line and 'ESSID' in line:
                     header_line = i
                     data_start = i + 1
+                    print(f"[CSV 파싱] 헤더 라인 발견: {i}")
+                    print(f"[CSV 파싱] 헤더 내용: {line.strip()}")
                     break
             
             if header_line is None:
+                print(f"[CSV 파싱 오류] 헤더를 찾을 수 없습니다.")
+                print(f"[CSV 파싱] 첫 10줄:")
+                for i, line in enumerate(lines[:10], 1):
+                    print(f"  {i}: {line.strip()}")
                 return wifi_list
             
             # 헤더 파싱
             header = [h.strip() for h in lines[header_line].split(',')]
+            print(f"[CSV 파싱] 헤더 컬럼: {header}")
             
             # 데이터 파싱
-            for line in lines[data_start:]:
-                if not line.strip() or line.strip().startswith('Station'):
+            parsed_count = 0
+            skipped_count = 0
+            
+            for line_num, line in enumerate(lines[data_start:], start=data_start+1):
+                line = line.strip()
+                
+                # 빈 줄이나 Station 섹션 시작 시 중단
+                if not line or line.startswith('Station'):
+                    print(f"[CSV 파싱] 데이터 섹션 종료 (라인 {line_num}): {line[:50]}")
                     break
                 
                 values = [v.strip() for v in line.split(',')]
                 
-                if len(values) < len(header):
+                if len(values) < 3:  # 최소 BSSID, ESSID, 채널
+                    skipped_count += 1
                     continue
                 
                 # 딕셔너리 생성
@@ -236,8 +332,13 @@ class WiFiScanner:
                 bssid = wifi_data.get('BSSID', '').strip()
                 essid = wifi_data.get('ESSID', '').strip()
                 
-                if not bssid or not essid or essid == '':
+                # ESSID가 없거나 숨겨진 네트워크인 경우 처리
+                if not bssid:
+                    skipped_count += 1
                     continue
+                
+                if not essid or essid == '':
+                    essid = '<Hidden Network>'
                 
                 # 프로토콜 파싱
                 encryption = wifi_data.get('Encryption', '').upper()
@@ -246,14 +347,16 @@ class WiFiScanner:
                 # 채널 파싱
                 channel = wifi_data.get('channel', '0')
                 try:
-                    channel = int(re.search(r'\d+', str(channel)).group() if re.search(r'\d+', str(channel)) else '0')
+                    channel_match = re.search(r'\d+', str(channel))
+                    channel = int(channel_match.group()) if channel_match else 0
                 except:
                     channel = 0
                 
                 # 신호 강도 파싱
                 power = wifi_data.get('Power', '0')
                 try:
-                    power = int(re.search(r'-?\d+', str(power)).group() if re.search(r'-?\d+', str(power)) else '0')
+                    power_match = re.search(r'-?\d+', str(power))
+                    power = int(power_match.group()) if power_match else 0
                 except:
                     power = 0
                 
@@ -276,11 +379,16 @@ class WiFiScanner:
                 }
                 
                 wifi_list.append(wifi_info)
+                parsed_count += 1
+                print(f"[CSV 파싱] WiFi 발견 ({parsed_count}): {essid} ({bssid}) - {protocol}")
             
+            print(f"[CSV 파싱 완료] 파싱: {parsed_count}개, 건너뜀: {skipped_count}개")
             return wifi_list
             
         except Exception as e:
-            print(f"CSV 파싱 오류: {e}")
+            print(f"[CSV 파싱 오류] {e}")
+            import traceback
+            traceback.print_exc()
             return wifi_list
     
     def parse_protocol(self, encryption: str) -> str:

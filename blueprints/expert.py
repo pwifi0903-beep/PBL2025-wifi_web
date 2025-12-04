@@ -86,23 +86,34 @@ def expert_page():
 def expert_scan_wifi():
     """관리자용 와이파이 스캔 API (더미 데이터 + 실제 스캔)"""
     try:
+        print("\n" + "=" * 60)
+        print("[API] WiFi 스캔 요청 수신")
+        
         # 더미 데이터 생성
         dummy_wifi_list = wifi_generator.generate_expert_wifi_list()
+        print(f"[API] 더미 데이터 생성: {len(dummy_wifi_list)}개")
         
         # 실제 WiFi 스캔 수행
         try:
+            print(f"[API] 실제 스캔 시작 (인터페이스: {Config.WIFI_INTERFACE}, 시간: {Config.WIFI_SCAN_DURATION}초)")
             scanner = wifi_scanner.__class__(
                 interface=Config.WIFI_INTERFACE,
                 scan_duration=Config.WIFI_SCAN_DURATION
             )
             real_wifi_list = scanner.scan_wifi()
+            print(f"[API] 실제 스캔 완료: {len(real_wifi_list)}개 발견")
             
             # 더미 데이터와 실제 스캔 데이터 병합
             merged_wifi_list = scanner.merge_with_dummy(real_wifi_list, dummy_wifi_list)
+            print(f"[API] 데이터 병합 완료: 총 {len(merged_wifi_list)}개 (더미: {len(dummy_wifi_list)}, 실제: {len(real_wifi_list)})")
         except Exception as scan_error:
             # 실제 스캔 실패 시 더미 데이터만 반환
-            print(f"실제 WiFi 스캔 실패: {scan_error}")
+            print(f"[API 오류] 실제 WiFi 스캔 실패: {scan_error}")
+            import traceback
+            traceback.print_exc()
             merged_wifi_list = dummy_wifi_list
+        
+        print("=" * 60 + "\n")
         
         return jsonify({
             'success': True,
@@ -110,6 +121,9 @@ def expert_scan_wifi():
             'count': len(merged_wifi_list)
         })
     except Exception as e:
+        print(f"[API 오류] 전체 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
