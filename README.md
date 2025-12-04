@@ -10,12 +10,6 @@ WiFi 네트워크의 보안 취약점을 탐지하고 분석하는 웹 애플리
 # Python 가상환경 생성
 python -m venv venv
 
-# Windows PowerShell에서 가상환경 활성화
-.\venv\Scripts\Activate.ps1
-
-# Windows CMD에서 가상환경 활성화
-venv\Scripts\activate.bat
-
 # Linux/Mac에서 가상환경 활성화
 source venv/bin/activate
 ```

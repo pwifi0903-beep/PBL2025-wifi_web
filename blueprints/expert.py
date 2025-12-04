@@ -1,6 +1,8 @@
-from flask import Blueprint, render_template, jsonify, request, redirect, url_for, make_response
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for, make_response, Response
 from data.wifi_data import wifi_generator
 from services.security_check import security_service
+from services.wifi_scanner import wifi_scanner
+from services.cracking_service import cracking_service
 from utils.jwt_auth import (
     generate_access_token, 
     generate_refresh_token, 
@@ -10,6 +12,7 @@ from utils.jwt_auth import (
     jwt_required
 )
 from config import Config
+import json
 
 expert_bp = Blueprint('expert', __name__)
 
@@ -81,13 +84,30 @@ def expert_page():
 @expert_bp.route('/api/expert/scan', methods=['POST'])
 @login_required
 def expert_scan_wifi():
-    """관리자용 와이파이 스캔 API"""
+    """관리자용 와이파이 스캔 API (더미 데이터 + 실제 스캔)"""
     try:
-        wifi_list = wifi_generator.generate_expert_wifi_list()
+        # 더미 데이터 생성
+        dummy_wifi_list = wifi_generator.generate_expert_wifi_list()
+        
+        # 실제 WiFi 스캔 수행
+        try:
+            scanner = wifi_scanner.__class__(
+                interface=Config.WIFI_INTERFACE,
+                scan_duration=Config.WIFI_SCAN_DURATION
+            )
+            real_wifi_list = scanner.scan_wifi()
+            
+            # 더미 데이터와 실제 스캔 데이터 병합
+            merged_wifi_list = scanner.merge_with_dummy(real_wifi_list, dummy_wifi_list)
+        except Exception as scan_error:
+            # 실제 스캔 실패 시 더미 데이터만 반환
+            print(f"실제 WiFi 스캔 실패: {scan_error}")
+            merged_wifi_list = dummy_wifi_list
+        
         return jsonify({
             'success': True,
-            'wifi_list': wifi_list,
-            'count': len(wifi_list)
+            'wifi_list': merged_wifi_list,
+            'count': len(merged_wifi_list)
         })
     except Exception as e:
         return jsonify({
@@ -98,22 +118,48 @@ def expert_scan_wifi():
 @expert_bp.route('/api/expert/security-check', methods=['POST'])
 @login_required
 def security_check():
-    """보안 점검 API"""
+    """보안 점검 API (크래킹 시작)"""
     try:
         data = request.get_json()
+        wifi_data = data.get('wifi_data')
         protocol = data.get('protocol')
         
-        if not protocol:
+        if not wifi_data and not protocol:
             return jsonify({
                 'success': False,
-                'error': '프로토콜 정보가 필요합니다.'
+                'error': 'WiFi 정보 또는 프로토콜 정보가 필요합니다.'
             }), 400
         
-        result = security_service.simulate_security_check(protocol)
-        return jsonify({
-            'success': True,
-            'result': result
-        })
+        # 프로토콜 추출
+        if not protocol and wifi_data:
+            protocol = wifi_data.get('protocol', '')
+        
+        # OPEN 프로토콜은 크래킹 불필요
+        if protocol and protocol.upper() == 'OPEN':
+            return jsonify({
+                'success': False,
+                'error': 'OPEN 네트워크는 크래킹이 불필요합니다.'
+            }), 400
+        
+        # 크래킹 시작
+        if wifi_data:
+            cracking_id = cracking_service.start_cracking(
+                wifi_data,
+                interface=Config.WIFI_INTERFACE
+            )
+            
+            return jsonify({
+                'success': True,
+                'cracking_id': cracking_id,
+                'message': '크래킹을 시작했습니다.'
+            })
+        else:
+            # WiFi 데이터가 없으면 시뮬레이션만 수행
+            result = security_service.simulate_security_check(protocol)
+            return jsonify({
+                'success': True,
+                'result': result
+            })
     except Exception as e:
         return jsonify({
             'success': False,
@@ -170,6 +216,37 @@ def refresh_token():
     response.set_cookie('access_token', new_access_token, httponly=True, secure=False, samesite='Lax', max_age=900)
     
     return response
+
+@expert_bp.route('/api/expert/cracking-progress', methods=['GET'])
+@login_required
+def cracking_progress():
+    """크래킹 진행 상황 조회 API"""
+    try:
+        cracking_id = request.args.get('cracking_id')
+        
+        if not cracking_id:
+            return jsonify({
+                'success': False,
+                'error': 'cracking_id가 필요합니다.'
+            }), 400
+        
+        progress = cracking_service.get_progress(cracking_id)
+        
+        # 크래킹이 완료되었거나 실패한 경우 결과도 포함
+        result = None
+        if progress.get('status') in ['completed', 'failed', 'error']:
+            result = cracking_service.get_result(cracking_id)
+        
+        return jsonify({
+            'success': True,
+            'progress': progress,
+            'result': result
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @expert_bp.route('/api/expert/verify', methods=['GET'])
 @jwt_required

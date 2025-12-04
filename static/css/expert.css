@@ -1166,3 +1166,20 @@
 .popup-footer .btn {
     min-width: 100px;
 }
+
+/* 스캔 배지 스타일 */
+.scan-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 4px;
+    margin-left: 8px;
+    background: #10b981;
+    color: white;
+    vertical-align: middle;
+}
+
+.scan-badge.dummy {
+    background: #6b7280;
+}
