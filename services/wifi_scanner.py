@@ -171,28 +171,15 @@ class WiFiScanner:
         print(f"[5단계] 사용할 모니터 인터페이스: {self.monitor_interface}")
         
         try:
-            # airodump-ng 실행
-            output_file = os.path.join(self.scan_output_dir, "scan")
-            csv_file = f"{output_file}-01.csv"
-            
+            # airodump-ng 실행 (stdout으로 직접 파싱)
             print(f"[6단계] airodump-ng 실행 준비")
-            print(f"  - 출력 파일: {output_file}")
-            print(f"  - 예상 CSV 파일: {csv_file}")
+            print(f"  - 인터페이스: {self.monitor_interface}")
             
-            # 기존 파일 삭제
-            import glob
-            for old_file in glob.glob(f"{output_file}*"):
-                try:
-                    os.remove(old_file)
-                    print(f"  - 기존 파일 삭제: {old_file}")
-                except Exception as e:
-                    print(f"  - 파일 삭제 실패: {e}")
-            
-            # airodump-ng 실행 명령어
+            # airodump-ng 실행 명령어 (stdout으로 출력)
             # --ignore-negative-one: 이미 모니터 모드인 경우 ioctl 오류 무시
-            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng --ignore-negative-one -w {output_file} --output-format csv {self.monitor_interface}"
+            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S airodump-ng --ignore-negative-one {self.monitor_interface}"
             print(f"[7단계] airodump-ng 실행 중...")
-            print(f"  - 명령어: airodump-ng --ignore-negative-one -w {output_file} --output-format csv {self.monitor_interface}")
+            print(f"  - 명령어: airodump-ng --ignore-negative-one {self.monitor_interface}")
             
             # airodump-ng 실행 (백그라운드, sudo 비밀번호 자동 입력)
             process = subprocess.Popen(
@@ -204,8 +191,34 @@ class WiFiScanner:
             )
             
             print(f"[8단계] 스캔 대기 중... ({self.scan_duration}초)")
-            # 스캔 시간만큼 대기
-            time.sleep(self.scan_duration)
+            
+            # stdout을 실시간으로 읽어서 파싱
+            stdout_lines = []
+            start_time = time.time()
+            
+            # 스캔 시간 동안 stdout 읽기
+            while time.time() - start_time < self.scan_duration:
+                if process.stdout:
+                    try:
+                        # non-blocking 읽기
+                        import select
+                        import sys
+                        
+                        if sys.platform != 'win32' and hasattr(select, 'select'):
+                            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                            if ready:
+                                line = process.stdout.readline()
+                                if line:
+                                    stdout_lines.append(line.strip())
+                        else:
+                            # Windows 또는 select가 없는 경우
+                            line = process.stdout.readline()
+                            if line:
+                                stdout_lines.append(line.strip())
+                    except Exception:
+                        pass
+                
+                time.sleep(0.1)  # 0.1초마다 확인
             
             print(f"[9단계] airodump-ng 프로세스 종료 중...")
             # 프로세스 강제 종료 (airodump-ng는 종료 신호에 잘 응답하지 않으므로 확실한 방법 사용)
@@ -288,87 +301,31 @@ class WiFiScanner:
                 if "ioctl(SIOCSIWMODE)" in stderr_output:
                     print(f"  - 참고: ioctl 오류는 --ignore-negative-one 옵션으로 무시됩니다.")
             
-            # CSV 파일이 생성될 때까지 짧은 대기 (파일 시스템 동기화)
-            print(f"  - CSV 파일 생성 대기 중... (1초)")
-            time.sleep(1.0)  # 파일 flush 시간 확보
-            
-            # CSV 파일 찾기
-            print(f"[10단계] CSV 파일 확인 중...")
+            # 남은 stdout 읽기
             try:
-                csv_files = glob.glob(f"{output_file}-*.csv")
-                print(f"  - 찾은 CSV 파일: {csv_files}")
-                
-                if not csv_files:
-                    print(f"[오류] CSV 파일을 찾을 수 없습니다!")
-                    print(f"  - 검색 경로: {output_file}-*.csv")
-                    print(f"  - 디렉토리 내용:")
-                    try:
-                        dir_items = os.listdir(self.scan_output_dir)
-                        if dir_items:
-                            for item in dir_items:
-                                print(f"    - {item}")
-                        else:
-                            print(f"    - (디렉토리가 비어있음)")
-                    except Exception as e:
-                        print(f"    - 디렉토리 읽기 실패: {e}")
-                    return []
-                
-                # 가장 최근 파일 선택
-                csv_file = max(csv_files, key=os.path.getmtime)
-                print(f"  - 사용할 CSV 파일: {csv_file}")
-                
-                # 파일 크기 확인
-                try:
-                    file_size = os.path.getsize(csv_file)
-                    print(f"  - 파일 크기: {file_size} bytes")
-                    if file_size == 0:
-                        print(f"[경고] CSV 파일이 비어있습니다!")
-                        return []
-                except Exception as e:
-                    print(f"[오류] 파일 크기 확인 실패: {e}")
-                    return []
-                    
-            except Exception as e:
-                print(f"[오류] CSV 파일 확인 중 오류 발생: {e}")
-                import traceback
-                traceback.print_exc()
-                return []
+                if process.stdout:
+                    remaining = process.stdout.read()
+                    if remaining:
+                        for line in remaining.split('\n'):
+                            if line.strip():
+                                stdout_lines.append(line.strip())
+            except Exception:
+                pass
             
-            # CSV 파일 내용 확인 (처음 20줄)
-            print(f"[11단계] CSV 파일 내용 확인 (처음 20줄):")
-            try:
-                with open(csv_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    preview_lines = f.readlines()[:20]
-                    if preview_lines:
-                        for i, line in enumerate(preview_lines, 1):
-                            print(f"  {i}: {line.strip()[:100]}")
-                    else:
-                        print(f"  - 파일이 비어있습니다.")
-            except Exception as e:
-                print(f"[오류] CSV 파일 읽기 실패: {e}")
-                import traceback
-                traceback.print_exc()
-                return []
+            print(f"[10단계] stdout 파싱 중... (총 {len(stdout_lines)}줄)")
             
-            # CSV 파일 파싱
-            print(f"[12단계] CSV 파일 파싱 중...")
-            try:
-                wifi_list = self.parse_airodump_csv(csv_file)
-                print(f"[13단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
-                
-                if wifi_list:
-                    for i, wifi in enumerate(wifi_list, 1):
-                        print(f"  {i}. {wifi.get('ssid', 'N/A')} ({wifi.get('bssid', 'N/A')}) - {wifi.get('protocol', 'N/A')}")
-                else:
-                    print(f"  - 파싱된 WiFi가 없습니다.")
-                
-                print("=" * 50)
-                return wifi_list
-            except Exception as e:
-                print(f"[오류] CSV 파일 파싱 중 오류 발생: {e}")
-                import traceback
-                traceback.print_exc()
-                return []
+            # stdout에서 WiFi 데이터 파싱
+            wifi_list = self.parse_airodump_stdout(stdout_lines)
+            print(f"[11단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
+            
+            if wifi_list:
+                for i, wifi in enumerate(wifi_list, 1):
+                    print(f"  {i}. {wifi.get('ssid', 'N/A')} ({wifi.get('bssid', 'N/A')}) - {wifi.get('protocol', 'N/A')}")
+            else:
+                print(f"  - 파싱된 WiFi가 없습니다.")
+            
+            print("=" * 50)
+            return wifi_list
             
         except Exception as e:
             print(f"[오류] WiFi 스캔 오류: {e}")
@@ -545,6 +502,129 @@ class WiFiScanner:
             'WPA3': []
         }
         return vuln_map.get(protocol.upper(), [])
+    
+    def parse_airodump_stdout(self, lines: List[str]) -> List[Dict[str, Any]]:
+        """airodump-ng stdout 파싱"""
+        wifi_list = []
+        
+        print(f"[stdout 파싱] 총 라인 수: {len(lines)}")
+        
+        if not lines:
+            print(f"[stdout 파싱 오류] stdout이 비어있습니다.")
+            return wifi_list
+        
+        # 헤더 찾기
+        header_line = None
+        for i, line in enumerate(lines):
+            if 'BSSID' in line and ('ESSID' in line or 'Station' in line):
+                header_line = i
+                print(f"[stdout 파싱] 헤더 라인 발견: {i}")
+                print(f"[stdout 파싱] 헤더 내용: {line.strip()[:100]}")
+                break
+        
+        if header_line is None:
+            print(f"[stdout 파싱 오류] 헤더를 찾을 수 없습니다.")
+            print(f"[stdout 파싱] 첫 10줄:")
+            for i, line in enumerate(lines[:10], 1):
+                print(f"  {i}: {line.strip()[:80]}")
+            return wifi_list
+        
+        # 데이터 파싱
+        parsed_count = 0
+        skipped_count = 0
+        
+        for line_num, line in enumerate(lines[header_line + 1:], start=header_line + 2):
+            line = line.strip()
+            
+            # Station 섹션 시작 시 중단
+            if 'Station' in line or not line:
+                print(f"[stdout 파싱] 데이터 섹션 종료 (라인 {line_num})")
+                break
+            
+            # MAC 주소 형식 확인 (XX:XX:XX:XX:XX:XX)
+            parts = line.split()
+            if len(parts) < 3:
+                skipped_count += 1
+                continue
+            
+            # BSSID는 첫 번째 컬럼 (MAC 주소 형식)
+            bssid = None
+            for part in parts[:3]:
+                if re.match(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$', part):
+                    bssid = part
+                    break
+            
+            if not bssid:
+                skipped_count += 1
+                continue
+            
+            # ESSID 찾기 (보통 따옴표로 감싸져 있거나 특정 위치에 있음)
+            essid = ""
+            for i, part in enumerate(parts):
+                if part.startswith('"') and part.endswith('"'):
+                    essid = part.strip('"')
+                    break
+                elif i > 2 and not re.match(r'^[0-9:-]+$', part) and ':' not in part and len(part) > 0:
+                    # 숫자나 MAC 주소가 아닌 문자열이면 ESSID일 가능성
+                    if not part.isdigit():
+                        essid = part
+                        break
+            
+            if not essid:
+                essid = '<Hidden Network>'
+            
+            # 채널 찾기 (숫자 필드 중에서)
+            channel = 0
+            for part in parts[1:]:
+                if part.isdigit() and 1 <= int(part) <= 165:
+                    channel = int(part)
+                    break
+            
+            # Power 찾기 (음수 숫자)
+            power = 0
+            for part in parts:
+                power_match = re.search(r'^-?\d+$', part)
+                if power_match:
+                    pwr = int(power_match.group())
+                    if pwr < 0:  # Power는 보통 음수
+                        power = pwr
+                        break
+            
+            # Encryption 찾기 (WPA, WEP, WPA2 등)
+            encryption = ""
+            for part in parts:
+                part_upper = part.upper()
+                if any(x in part_upper for x in ['WPA', 'WEP', 'WPA2', 'WPA3', 'OPN', 'OPN']):
+                    encryption = part_upper
+                    break
+            
+            # 프로토콜 파싱
+            protocol = self.parse_protocol(encryption)
+            
+            # 보안 수준 결정
+            security_level = self.get_security_level(protocol)
+            
+            # 취약점 목록
+            vulnerabilities = self.get_vulnerabilities(protocol)
+            
+            wifi_info = {
+                'ssid': essid,
+                'bssid': bssid,
+                'protocol': protocol,
+                'channel': channel,
+                'signal_strength': power,
+                'security_level': security_level,
+                'vulnerabilities': vulnerabilities,
+                'encryption': encryption,
+                'is_real_scan': True
+            }
+            
+            wifi_list.append(wifi_info)
+            parsed_count += 1
+            print(f"[stdout 파싱] WiFi 발견 ({parsed_count}): {essid} ({bssid}) - {protocol}")
+        
+        print(f"[stdout 파싱 완료] 파싱: {parsed_count}개, 건너뜀: {skipped_count}개")
+        return wifi_list
     
     def merge_with_dummy(self, real_wifi_list: List[Dict[str, Any]], dummy_wifi_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """실제 스캔 데이터와 더미 데이터 병합 (더미 데이터 먼저, 실제 데이터 나중에)"""
