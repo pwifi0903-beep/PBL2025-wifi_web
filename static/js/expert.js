@@ -239,10 +239,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // Rogue AP 확인
             const isRogueAp = rogueApSsids.has(wifi.ssid) && wifi.protocol && wifi.protocol.toUpperCase() === 'OPEN';
             
+            // 실제 스캔 데이터인지 확인
+            const isRealScan = wifi.is_real_scan === true;
+            const scanBadge = isRealScan ? '<span class="scan-badge">실제 스캔</span>' : '<span class="scan-badge dummy">시뮬레이션</span>';
+            
             return `
             <div class="wifi-item-expert" data-index="${index}">
                 <div class="wifi-info-expert">
-                    <div class="wifi-name-expert">${escapeHtml(wifi.ssid)}</div>
+                    <div class="wifi-name-expert">
+                        ${escapeHtml(wifi.ssid)}
+                        ${scanBadge}
+                    </div>
                     ${isRogueAp ? '<div class="rogue-warning">⚠️ Rogue AP 의심</div>' : ''}
                 </div>
                 <div class="wifi-status-expert">
@@ -454,6 +461,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return securityGuideData[level] || null;
     }
     
+    let currentCrackingId = null;
+    let progressPollInterval = null;
+    
     function performSecurityCheck(wifiData) {
         if (wifiData.protocol.toLowerCase() === 'open') {
             showAlert('Open 네트워크는 보안 점검을 수행할 수 없습니다.', 'warning');
@@ -463,55 +473,140 @@ document.addEventListener('DOMContentLoaded', function() {
         // 진행 표시 시작
         securityCheckProgress.style.display = 'flex';
         progressFill.style.width = '0%';
-        progressText.textContent = '점검을 시작합니다...';
+        progressText.textContent = '크래킹을 시작합니다...';
         
-        // 4단계 진행 시뮬레이션
-        const steps = [
-            '1/4 보안 설정 확인 중...',
-            '2/4 약한 암호화 확인 중...',
-            '3/4 취약점 스캔 중...',
-            '4/4 분석 완료 중...'
-        ];
+        // 기존 polling 중지
+        if (progressPollInterval) {
+            clearInterval(progressPollInterval);
+            progressPollInterval = null;
+        }
         
-        let currentStep = 0;
-        const stepInterval = setInterval(() => {
-            if (currentStep < steps.length) {
-                progressFill.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
-                progressText.textContent = steps[currentStep];
-                currentStep++;
-            } else {
-                clearInterval(stepInterval);
+        // 크래킹 시작 API 호출
+        fetchWithAuth('/api/expert/security-check', {
+            method: 'POST',
+            body: JSON.stringify({
+                wifi_data: wifiData,
+                protocol: wifiData.protocol
+            })
+        })
+        .then(response => {
+            if (!response) return null;
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.cracking_id) {
+                // 크래킹 ID 저장
+                currentCrackingId = data.cracking_id;
                 
-                // 실제 보안 점검 API 호출
-                fetchWithAuth('/api/expert/security-check', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        protocol: wifiData.protocol
-                    })
-                })
-                .then(response => {
-                    if (!response) return null;
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        showSecurityCheckResult(data.result);
+                // 실시간 진행 상황 polling 시작
+                startProgressPolling(currentCrackingId);
+            } else if (data.success && data.result) {
+                // 시뮬레이션 결과인 경우 (WiFi 데이터 없음)
+                showSecurityCheckResult(data.result);
+                securityCheckProgress.style.display = 'none';
+            } else {
+                showAlert('보안 점검 중 오류가 발생했습니다: ' + (data.error || '알 수 없는 오류'), 'error');
+                securityCheckProgress.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('네트워크 오류가 발생했습니다.', 'error');
+            securityCheckProgress.style.display = 'none';
+        });
+    }
+    
+    function startProgressPolling(crackingId) {
+        // 즉시 한 번 조회
+        checkCrackingProgress(crackingId);
+        
+        // 2초마다 진행 상황 조회
+        progressPollInterval = setInterval(() => {
+            checkCrackingProgress(crackingId);
+        }, 2000);
+    }
+    
+    function checkCrackingProgress(crackingId) {
+        fetchWithAuth(`/api/expert/cracking-progress?cracking_id=${crackingId}`, {
+            method: 'GET'
+        })
+        .then(response => {
+            if (!response) return null;
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.progress) {
+                const progress = data.progress;
+                
+                // 진행률 업데이트
+                progressFill.style.width = `${progress.progress || 0}%`;
+                progressText.textContent = progress.message || '진행 중...';
+                
+                // 크래킹 상태 확인
+                if (progress.status === 'completed') {
+                    // 크래킹 완료
+                    clearInterval(progressPollInterval);
+                    progressPollInterval = null;
+                    
+                    // 결과 표시
+                    if (data.result && data.result.success) {
+                        const password = data.result.password || '알 수 없음';
+                        showAlert(`크래킹 성공!\n\n패스워드: ${password}\n\n방법: ${data.result.method || '알 수 없음'}`, 'success');
+                        
+                        // WiFi 데이터 업데이트
+                        if (currentWifiData) {
+                            currentWifiData.check_status = 'vulnerable';
+                            currentWifiData.cracked_password = password;
+                            updateWifiListStatus();
+                        }
                     } else {
-                        showAlert('보안 점검 중 오류가 발생했습니다: ' + data.error, 'error');
+                        showAlert('크래킹이 완료되었지만 패스워드를 찾지 못했습니다.', 'warning');
                     }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showAlert('네트워크 오류가 발생했습니다.', 'error');
-                })
-                .finally(() => {
+                    
                     // 진행 표시 숨김
                     setTimeout(() => {
                         securityCheckProgress.style.display = 'none';
                     }, 2000);
-                });
+                    
+                } else if (progress.status === 'failed' || progress.status === 'error') {
+                    // 크래킹 실패
+                    clearInterval(progressPollInterval);
+                    progressPollInterval = null;
+                    
+                    showAlert(`크래킹 실패: ${progress.message || '알 수 없는 오류'}`, 'error');
+                    
+                    // 진행 표시 숨김
+                    setTimeout(() => {
+                        securityCheckProgress.style.display = 'none';
+                    }, 2000);
+                }
+                // 'running' 상태는 계속 진행
+            } else {
+                console.error('진행 상황 조회 실패:', data.error);
             }
-        }, 1250); // 5초 / 4단계 = 1.25초씩
+        })
+        .catch(error => {
+            console.error('진행 상황 조회 오류:', error);
+        });
+    }
+    
+    function updateWifiListStatus() {
+        // WiFi 목록에서 해당 항목 찾아서 업데이트
+        const wifiItems = document.querySelectorAll('.wifi-item-expert');
+        wifiItems.forEach(item => {
+            const index = parseInt(item.dataset.index);
+            if (wifiDataList[index] && currentWifiData && wifiDataList[index].ssid === currentWifiData.ssid) {
+                wifiDataList[index].check_status = currentWifiData.check_status;
+                wifiDataList[index].cracked_password = currentWifiData.cracked_password;
+                
+                // 점검 결과 칸 업데이트
+                const checkStatusElement = item.querySelector('.check-status');
+                if (checkStatusElement) {
+                    checkStatusElement.className = `check-status ${currentWifiData.check_status}`;
+                    checkStatusElement.textContent = getCheckStatusText(currentWifiData.check_status);
+                }
+            }
+        });
     }
     
     function showSecurityCheckResult(result) {
