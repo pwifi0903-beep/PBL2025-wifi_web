@@ -1,129 +1,431 @@
 import subprocess
 import re
+import os
+import time
 from typing import List, Dict, Any, Optional
 from config import Config
 
 
 class WiFiScanner:
-    """nmcli를 사용한 빠른 WiFi 스캔 서비스"""
+    """airodump-ng를 사용한 실제 WiFi 스캔 서비스 (블로킹 문제 수정)"""
     
     def __init__(self, interface: Optional[str] = None, scan_duration: int = 15):
         """
         Args:
-            interface: WiFi 어댑터 인터페이스 (nmcli는 자동 감지하므로 무시됨)
-            scan_duration: 스캔 지속 시간 (nmcli는 즉시 반환하므로 무시됨)
+            interface: WiFi 어댑터 인터페이스 (None이면 자동 감지)
+            scan_duration: 스캔 지속 시간 (초)
         """
         self.interface = interface
-        self.max_results = 15  # 최대 결과 개수
+        self.scan_duration = scan_duration
+        self.monitor_interface = None
+        self.scan_output_dir = "/tmp/wisafe_scan"
         
-    def scan_wifi(self) -> List[Dict[str, Any]]:
-        """WiFi 스캔 수행 (nmcli 사용)"""
-        print("=" * 60)
-        print("[WiFi 스캔 시작 - nmcli 방식]")
-        
+    def detect_wifi_interface(self) -> Optional[str]:
+        """WiFi 어댑터 인터페이스 자동 감지"""
         try:
-            # nmcli를 사용한 WiFi 스캔
-            print(f"[1단계] nmcli로 WiFi 스캔 중...")
-            
-            # nmcli device wifi list 실행
-            # -t: 파싱하기 쉬운 형식
-            # -f: 필요한 필드만 선택 (SSID, BSSID, CHAN, SIGNAL, SECURITY)
+            # iwconfig로 무선 인터페이스 찾기
             result = subprocess.run(
-                ['nmcli', '-t', '-f', 'SSID,BSSID,CHAN,SIGNAL,SECURITY', 'device', 'wifi', 'list'],
+                ['iwconfig'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            # wlan0, wlan1, wlp 등 무선 인터페이스 찾기
+            for line in result.stdout.split('\n'):
+                if 'IEEE 802.11' in line or 'ESSID' in line:
+                    match = re.search(r'^(\w+)\s+', line)
+                    if match:
+                        interface = match.group(1)
+                        # lo, eth 등은 제외
+                        if interface.startswith(('wlan', 'wlp', 'wlx', 'wifi')):
+                            return interface
+            
+            # ip link로도 시도
+            result = subprocess.run(
+                ['ip', 'link', 'show'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            for line in result.stdout.split('\n'):
+                if 'wlan' in line.lower() or 'wlp' in line.lower():
+                    match = re.search(r':\s*(\w+):', line)
+                    if match:
+                        interface = match.group(1)
+                        if interface.startswith(('wlan', 'wlp', 'wlx', 'wifi')):
+                            return interface
+            
+            return None
+        except Exception as e:
+            print(f"WiFi 인터페이스 감지 오류: {e}")
+            return None
+    
+    def start_monitor_mode(self, interface: str) -> Optional[str]:
+        """모니터 모드 활성화"""
+        try:
+            # airmon-ng로 모니터 모드 시작 (sudo 비밀번호 자동 입력, -E로 환경 변수 유지)
+            result = subprocess.run(
+                f"echo '{Config.SUDO_PASSWORD}' | sudo -S -E airmon-ng start {interface}",
+                shell=True,
                 capture_output=True,
                 text=True,
                 timeout=10
             )
             
-            if result.returncode != 0:
-                print(f"[오류] nmcli 실행 실패: {result.stderr}")
+            print(f"[모니터 모드] airmon-ng stdout:\n{result.stdout}")
+            if result.stderr:
+                print(f"[모니터 모드] airmon-ng stderr:\n{result.stderr}")
+            
+            # 모니터 모드 활성화 후 iwconfig로 확인
+            iwconfig_result = subprocess.run(
+                ['iwconfig'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            # 원래 인터페이스가 모니터 모드인지 확인
+            for line in iwconfig_result.stdout.split('\n'):
+                if interface in line and 'Mode:Monitor' in line:
+                    print(f"[모니터 모드] 인터페이스 {interface}가 모니터 모드로 활성화됨")
+                    return interface
+            
+            # 원래 인터페이스 이름 반환
+            print(f"[모니터 모드] 기본 인터페이스 사용: {interface}")
+            return interface
+                
+        except Exception as e:
+            print(f"모니터 모드 활성화 오류: {e}")
+            return None
+    
+    def stop_monitor_mode(self, monitor_interface: str):
+        """모니터 모드 비활성화"""
+        try:
+            if monitor_interface:
+                subprocess.run(
+                    f"echo '{Config.SUDO_PASSWORD}' | sudo -S -E airmon-ng stop {monitor_interface}",
+                    shell=True,
+                    capture_output=True,
+                    timeout=10
+                )
+        except Exception as e:
+            print(f"모니터 모드 비활성화 오류: {e}")
+    
+    def scan_wifi(self) -> List[Dict[str, Any]]:
+        """실제 WiFi 스캔 수행"""
+        print("=" * 50)
+        print("[WiFi 스캔 시작 - airodump-ng]")
+        print(f"설정된 인터페이스: {self.interface}")
+        print(f"스캔 지속 시간: {self.scan_duration}초")
+        
+        # 인터페이스 감지
+        if not self.interface:
+            print("[1단계] WiFi 인터페이스 자동 감지 중...")
+            self.interface = self.detect_wifi_interface()
+            print(f"감지된 인터페이스: {self.interface}")
+        
+        if not self.interface:
+            print("[오류] WiFi 인터페이스를 찾을 수 없습니다.")
+            return []
+        
+        print(f"[2단계] 사용할 인터페이스: {self.interface}")
+        
+        # 출력 디렉토리 생성
+        os.makedirs(self.scan_output_dir, exist_ok=True)
+        print(f"[3단계] 출력 디렉토리: {self.scan_output_dir}")
+        
+        # 모니터 모드 인터페이스 확인
+        self.monitor_interface = None
+        try:
+            result = subprocess.run(
+                ['iwconfig'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            for line in result.stdout.split('\n'):
+                if 'Mode:Monitor' in line:
+                    match = re.search(r'^(\w+)\s+', line)
+                    if match:
+                        self.monitor_interface = match.group(1)
+                        print(f"[4단계] 모니터 모드 인터페이스 확인: {self.monitor_interface}")
+                        break
+        except Exception as e:
+            print(f"[경고] 모니터 모드 확인 오류: {e}")
+        
+        # 모니터 모드가 없으면 활성화 시도
+        if not self.monitor_interface:
+            print("[4단계] 모니터 모드 활성화 시도 중...")
+            self.monitor_interface = self.start_monitor_mode(self.interface)
+            if self.monitor_interface:
+                print(f"[성공] 모니터 모드 활성화: {self.monitor_interface}")
+            else:
+                print("[오류] 모니터 모드를 활성화할 수 없습니다.")
                 return []
+        
+        print(f"[5단계] 사용할 모니터 인터페이스: {self.monitor_interface}")
+        
+        try:
+            # 인터페이스 명시적으로 활성화
+            print(f"[6단계] 인터페이스 활성화 중...")
+            try:
+                up_result = subprocess.run(
+                    f"echo '{Config.SUDO_PASSWORD}' | sudo -S ip link set {self.monitor_interface} up",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                print(f"  - 인터페이스 {self.monitor_interface} 활성화 완료")
+                time.sleep(1)
+            except Exception as e:
+                print(f"  - 경고: 인터페이스 활성화 중 오류 (무시하고 진행): {e}")
             
-            print(f"[2단계] nmcli 스캔 완료")
+            # airodump-ng 실행
+            print(f"[7단계] airodump-ng 실행 준비")
+            print(f"  - 인터페이스: {self.monitor_interface}")
             
-            # 결과 파싱
-            wifi_list = self.parse_nmcli_output(result.stdout)
+            cmd = f"echo '{Config.SUDO_PASSWORD}' | sudo -S -E airodump-ng --ignore-negative-one {self.monitor_interface}"
+            print(f"[8단계] airodump-ng 실행 중...")
+            print(f"  - 명령어: sudo -E airodump-ng --ignore-negative-one {self.monitor_interface}")
             
-            # 최대 15개로 제한
-            wifi_list = wifi_list[:self.max_results]
+            # airodump-ng 실행 (백그라운드, stderr 무시)
+            process = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True
+            )
             
-            print(f"[3단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
+            print(f"[9단계] 스캔 대기 중... (최대 {self.scan_duration}초, 최대 15개)")
+            
+            # stdout을 실시간으로 읽어서 파싱
+            stdout_lines = []
+            found_bssids = set()
+            start_time = time.time()
+            MAX_WIFI_COUNT = 15
+            
+            # 스캔 시간 동안 stdout 읽기
+            early_stop = False
+            while time.time() - start_time < self.scan_duration:
+                if process.stdout:
+                    try:
+                        # non-blocking 읽기
+                        import select
+                        import sys
+                        
+                        if sys.platform != 'win32' and hasattr(select, 'select'):
+                            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                            if ready:
+                                line = process.stdout.readline()
+                                if line:
+                                    line_stripped = line.strip()
+                                    stdout_lines.append(line_stripped)
+                                    
+                                    # BSSID 패턴 체크
+                                    bssid_match = re.search(r'([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}', line_stripped)
+                                    if bssid_match:
+                                        found_bssids.add(bssid_match.group())
+                                        print(f"  - WiFi 발견 중: {len(found_bssids)}개")
+                                        
+                                        # 15개 도달 시 조기 종료
+                                        if len(found_bssids) >= MAX_WIFI_COUNT:
+                                            elapsed = time.time() - start_time
+                                            print(f"  - 15개 도달! 조기 종료 ({elapsed:.1f}초)")
+                                            early_stop = True
+                                            break
+                        else:
+                            # Windows 또는 select가 없는 경우
+                            line = process.stdout.readline()
+                            if line:
+                                line_stripped = line.strip()
+                                stdout_lines.append(line_stripped)
+                                
+                                # BSSID 패턴 체크
+                                bssid_match = re.search(r'([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}', line_stripped)
+                                if bssid_match:
+                                    found_bssids.add(bssid_match.group())
+                                    print(f"  - WiFi 발견 중: {len(found_bssids)}개")
+                                    
+                                    if len(found_bssids) >= MAX_WIFI_COUNT:
+                                        elapsed = time.time() - start_time
+                                        print(f"  - 15개 도달! 조기 종료 ({elapsed:.1f}초)")
+                                        early_stop = True
+                                        break
+                    except Exception:
+                        pass
+                
+                if early_stop:
+                    break
+                
+                time.sleep(0.1)
+            
+            if early_stop:
+                print(f"[9-1단계] 조기 종료: {len(found_bssids)}개 WiFi 발견")
+            
+            print(f"[10단계] airodump-ng 프로세스 종료 중...")
+            # 프로세스 강제 종료
+            try:
+                process.terminate()
+                time.sleep(0.5)
+                
+                if process.poll() is None:
+                    print(f"  - 프로세스 강제 종료 중...")
+                    process.kill()
+                    time.sleep(0.5)
+                
+                return_code = process.poll()
+                if return_code is None:
+                    print(f"  - 경고: 프로세스 종료 확인 실패, 계속 진행...")
+                else:
+                    print(f"  - 프로세스 종료 완료 (반환 코드: {return_code})")
+                    
+                    if return_code != 0 and return_code > 0:
+                        print(f"  - 오류: airodump-ng가 오류 코드 {return_code}로 종료되었습니다.")
+                    elif return_code < 0:
+                        signal_name = abs(return_code)
+                        signal_names = {15: "SIGTERM", 9: "SIGKILL"}
+                        signal_desc = signal_names.get(signal_name, f"신호 {signal_name}")
+                        print(f"  - 프로세스가 {signal_desc}로 종료됨 (정상 종료)")
+            except Exception as e:
+                print(f"  - 프로세스 종료 오류: {e}, 강제 종료 시도...")
+                try:
+                    process.kill()
+                    time.sleep(0.5)
+                except:
+                    pass
+            
+            # stdout 파이프 닫기 (블로킹 방지 - 수정된 부분!)
+            try:
+                if process.stdout:
+                    process.stdout.close()
+                    print(f"  - stdout 파이프 닫기 완료")
+            except Exception as e:
+                print(f"  - stdout 닫기 오류 (무시): {e}")
+            
+            print(f"[11단계] stdout 파싱 중... (총 {len(stdout_lines)}줄)")
+            
+            # stdout에서 WiFi 데이터 파싱
+            wifi_list = self.parse_airodump_stdout(stdout_lines)
+            print(f"[12단계] 파싱 완료: {len(wifi_list)}개의 WiFi 발견")
             
             if wifi_list:
                 for i, wifi in enumerate(wifi_list, 1):
-                    print(f"  {i}. {wifi.get('ssid', 'N/A')} ({wifi.get('bssid', 'N/A')}) - {wifi.get('protocol', 'N/A')} - {wifi.get('signal_strength', 0)}dBm")
+                    print(f"  {i}. {wifi.get('ssid', 'N/A')} ({wifi.get('bssid', 'N/A')}) - {wifi.get('protocol', 'N/A')}")
             else:
-                print(f"  - 발견된 WiFi가 없습니다.")
+                print(f"  - 파싱된 WiFi가 없습니다.")
             
-            print("=" * 60)
+            print("=" * 50)
             return wifi_list
             
-        except subprocess.TimeoutExpired:
-            print(f"[오류] nmcli 실행 시간 초과")
-            return []
-        except FileNotFoundError:
-            print(f"[오류] nmcli가 설치되어 있지 않습니다.")
-            print(f"  - 설치: sudo apt-get install network-manager")
-            return []
         except Exception as e:
             print(f"[오류] WiFi 스캔 오류: {e}")
             import traceback
             traceback.print_exc()
             return []
+        finally:
+            # 모니터 모드는 유지 (다음 스캔을 위해)
+            pass
     
-    def parse_nmcli_output(self, output: str) -> List[Dict[str, Any]]:
-        """nmcli 출력 파싱"""
+    def parse_airodump_stdout(self, lines: List[str]) -> List[Dict[str, Any]]:
+        """airodump-ng stdout 파싱"""
         wifi_list = []
         
-        lines = output.strip().split('\n')
-        print(f"[파싱] 총 {len(lines)}줄")
+        print(f"[stdout 파싱] 총 라인 수: {len(lines)}")
         
-        for line in lines:
-            if not line.strip():
+        if not lines:
+            print(f"[stdout 파싱 오류] stdout이 비어있습니다.")
+            return wifi_list
+        
+        # 헤더 찾기
+        header_line = None
+        for i, line in enumerate(lines):
+            if 'BSSID' in line and ('ESSID' in line or 'Station' in line):
+                header_line = i
+                print(f"[stdout 파싱] 헤더 라인 발견: {i}")
+                print(f"[stdout 파싱] 헤더 내용: {line.strip()[:100]}")
+                break
+        
+        if header_line is None:
+            print(f"[stdout 파싱 오류] 헤더를 찾을 수 없습니다.")
+            print(f"[stdout 파싱] 첫 10줄:")
+            for i, line in enumerate(lines[:10], 1):
+                print(f"  {i}: {line.strip()[:80]}")
+            return wifi_list
+        
+        # 데이터 파싱
+        parsed_count = 0
+        skipped_count = 0
+        
+        for line_num, line in enumerate(lines[header_line + 1:], start=header_line + 2):
+            line = line.strip()
+            
+            # Station 섹션 시작 시 중단
+            if 'Station' in line or not line:
+                print(f"[stdout 파싱] 데이터 섹션 종료 (라인 {line_num})")
+                break
+            
+            # MAC 주소 형식 확인
+            parts = line.split()
+            if len(parts) < 3:
+                skipped_count += 1
                 continue
             
-            # nmcli -t 형식: SSID:BSSID:CHAN:SIGNAL:SECURITY
-            # 예: MyWiFi:AA:BB:CC:DD:EE:FF:1:75:WPA2
-            parts = line.split(':')
+            # BSSID 찾기
+            bssid = None
+            for part in parts[:3]:
+                if re.match(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$', part):
+                    bssid = part
+                    break
             
-            # BSSID는 콜론으로 구분되므로 최소 8개 파트 필요
-            # parts[0]: SSID
-            # parts[1:7]: BSSID (6개)
-            # parts[7]: CHAN
-            # parts[8]: SIGNAL
-            # parts[9:]: SECURITY (여러 개일 수 있음)
-            
-            if len(parts) < 9:
+            if not bssid:
+                skipped_count += 1
                 continue
             
-            ssid = parts[0]
-            bssid = ':'.join(parts[1:7])  # BSSID 재조립
-            channel = parts[7]
-            signal = parts[8]
-            security = ':'.join(parts[9:]) if len(parts) > 9 else ''
+            # ESSID 찾기
+            essid = ""
+            for i, part in enumerate(parts):
+                if part.startswith('"') and part.endswith('"'):
+                    essid = part.strip('"')
+                    break
+                elif i > 2 and not re.match(r'^[0-9:-]+$', part) and ':' not in part and len(part) > 0:
+                    if not part.isdigit():
+                        essid = part
+                        break
             
-            # SSID 필터링 (빈 SSID는 숨겨진 네트워크)
-            if not ssid:
-                ssid = '<Hidden Network>'
+            if not essid:
+                essid = '<Hidden Network>'
             
-            # BSSID 검증
-            if not re.match(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$', bssid):
-                continue
+            # 채널 찾기
+            channel = 0
+            for part in parts[1:]:
+                if part.isdigit() and 1 <= int(part) <= 165:
+                    channel = int(part)
+                    break
             
-            # 채널 파싱
-            try:
-                channel_num = int(channel) if channel.isdigit() else 0
-            except:
-                channel_num = 0
+            # Power 찾기
+            power = 0
+            for part in parts:
+                power_match = re.search(r'^-?\d+$', part)
+                if power_match:
+                    pwr = int(power_match.group())
+                    if pwr < 0:
+                        power = pwr
+                        break
             
-            # 신호 강도 파싱
-            try:
-                signal_strength = int(signal) if signal.lstrip('-').isdigit() else 0
-            except:
-                signal_strength = 0
+            # Encryption 찾기
+            encryption = ""
+            for part in parts:
+                part_upper = part.upper()
+                if any(x in part_upper for x in ['WPA', 'WEP', 'WPA2', 'WPA3', 'OPN']):
+                    encryption = part_upper
+                    break
             
             # 프로토콜 파싱
-            protocol = self.parse_protocol(security)
+            protocol = self.parse_protocol(encryption)
             
             # 보안 수준 결정
             security_level = self.get_security_level(protocol)
@@ -132,37 +434,37 @@ class WiFiScanner:
             vulnerabilities = self.get_vulnerabilities(protocol)
             
             wifi_info = {
-                'ssid': ssid,
+                'ssid': essid,
                 'bssid': bssid,
                 'protocol': protocol,
-                'channel': channel_num,
-                'signal_strength': signal_strength,
+                'channel': channel,
+                'signal_strength': power,
                 'security_level': security_level,
                 'vulnerabilities': vulnerabilities,
-                'encryption': security,
+                'encryption': encryption,
                 'is_real_scan': True
             }
             
             wifi_list.append(wifi_info)
+            parsed_count += 1
+            print(f"[stdout 파싱] WiFi 발견 ({parsed_count}): {essid} ({bssid}) - {protocol}")
         
-        print(f"[파싱] {len(wifi_list)}개 WiFi 파싱 완료")
+        print(f"[stdout 파싱 완료] 파싱: {parsed_count}개, 건너뜀: {skipped_count}개")
         return wifi_list
     
-    def parse_protocol(self, security: str) -> str:
-        """보안 정보에서 프로토콜 추출"""
-        security_upper = security.upper()
+    def parse_protocol(self, encryption: str) -> str:
+        """암호화 정보에서 프로토콜 추출"""
+        encryption_upper = encryption.upper()
         
-        if not security or security == '--' or 'NONE' in security_upper:
-            return 'OPEN'
-        elif 'WPA3' in security_upper:
+        if 'WPA3' in encryption_upper:
             return 'WPA3'
-        elif 'WPA2' in security_upper:
-            if 'WPS' in security_upper:
+        elif 'WPA2' in encryption_upper:
+            if 'WPS' in encryption_upper:
                 return 'WPA2_WPS'
             return 'WPA2'
-        elif 'WPA' in security_upper:
+        elif 'WPA' in encryption_upper:
             return 'WPA'
-        elif 'WEP' in security_upper:
+        elif 'WEP' in encryption_upper:
             return 'WEP'
         else:
             return 'OPEN'
@@ -192,7 +494,7 @@ class WiFiScanner:
         return vuln_map.get(protocol.upper(), [])
     
     def merge_with_dummy(self, real_wifi_list: List[Dict[str, Any]], dummy_wifi_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """실제 스캔 데이터와 더미 데이터 병합 (더미 데이터 먼저, 실제 데이터 나중에)"""
+        """실제 스캔 데이터와 더미 데이터 병합"""
         # 더미 데이터에 is_real_scan 플래그 추가
         for wifi in dummy_wifi_list:
             wifi['is_real_scan'] = False
