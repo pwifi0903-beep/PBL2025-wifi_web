@@ -201,17 +201,20 @@ class WiFiScanner:
                 cmd,
                 shell=True,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,  # stderr 블로킹 방지
                 text=True
             )
             
-            print(f"[9단계] 스캔 대기 중... ({self.scan_duration}초)")
+            print(f"[9단계] 스캔 대기 중... (최대 {self.scan_duration}초, 최대 15개)")
             
             # stdout을 실시간으로 읽어서 파싱
             stdout_lines = []
+            found_bssids = set()  # 발견된 BSSID 추적
             start_time = time.time()
+            MAX_WIFI_COUNT = 15  # 최대 WiFi 개수
             
             # 스캔 시간 동안 stdout 읽기
+            early_stop = False
             while time.time() - start_time < self.scan_duration:
                 if process.stdout:
                     try:
@@ -224,16 +227,49 @@ class WiFiScanner:
                             if ready:
                                 line = process.stdout.readline()
                                 if line:
-                                    stdout_lines.append(line.strip())
+                                    line_stripped = line.strip()
+                                    stdout_lines.append(line_stripped)
+                                    
+                                    # BSSID 패턴 체크 (XX:XX:XX:XX:XX:XX)
+                                    bssid_match = re.search(r'([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}', line_stripped)
+                                    if bssid_match:
+                                        found_bssids.add(bssid_match.group())
+                                        print(f"  - WiFi 발견 중: {len(found_bssids)}개")
+                                        
+                                        # 15개 도달 시 조기 종료
+                                        if len(found_bssids) >= MAX_WIFI_COUNT:
+                                            elapsed = time.time() - start_time
+                                            print(f"  - 15개 도달! 조기 종료 ({elapsed:.1f}초)")
+                                            early_stop = True
+                                            break
                         else:
                             # Windows 또는 select가 없는 경우
                             line = process.stdout.readline()
                             if line:
-                                stdout_lines.append(line.strip())
+                                line_stripped = line.strip()
+                                stdout_lines.append(line_stripped)
+                                
+                                # BSSID 패턴 체크
+                                bssid_match = re.search(r'([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}', line_stripped)
+                                if bssid_match:
+                                    found_bssids.add(bssid_match.group())
+                                    print(f"  - WiFi 발견 중: {len(found_bssids)}개")
+                                    
+                                    if len(found_bssids) >= MAX_WIFI_COUNT:
+                                        elapsed = time.time() - start_time
+                                        print(f"  - 15개 도달! 조기 종료 ({elapsed:.1f}초)")
+                                        early_stop = True
+                                        break
                     except Exception:
                         pass
                 
+                if early_stop:
+                    break
+                
                 time.sleep(0.1)  # 0.1초마다 확인
+            
+            if early_stop:
+                print(f"[9-1단계] 조기 종료: {len(found_bssids)}개 WiFi 발견")
             
             print(f"[10단계] airodump-ng 프로세스 종료 중...")
             # 프로세스 강제 종료 (airodump-ng는 종료 신호에 잘 응답하지 않으므로 확실한 방법 사용)
@@ -276,45 +312,6 @@ class WiFiScanner:
                     time.sleep(0.5)
                 except:
                     pass
-            
-            # stderr 확인 (프로세스 종료 후, 블로킹 방지)
-            # 주의: stderr.read()는 블로킹될 수 있으므로 타임아웃 사용
-            stderr_output = ""
-            try:
-                if process.stderr:
-                    # 타임아웃과 함께 stderr 읽기 (블로킹 방지)
-                    import threading
-                    import queue
-                    
-                    stderr_queue = queue.Queue()
-                    
-                    def read_stderr():
-                        try:
-                            if process.stderr:
-                                data = process.stderr.read()
-                                stderr_queue.put(data)
-                        except Exception:
-                            stderr_queue.put("")
-                    
-                    thread = threading.Thread(target=read_stderr)
-                    thread.daemon = True
-                    thread.start()
-                    thread.join(timeout=0.3)  # 0.3초 타임아웃
-                    
-                    try:
-                        stderr_output = stderr_queue.get_nowait()
-                    except queue.Empty:
-                        # 타임아웃 또는 데이터 없음 - 무시하고 진행
-                        pass
-            except Exception as e:
-                # stderr 읽기 실패는 무시
-                pass
-            
-            if stderr_output:
-                print(f"[경고] airodump-ng stderr:\n{stderr_output}")
-                # ioctl 오류는 --ignore-negative-one 옵션으로 무시 가능
-                if "ioctl(SIOCSIWMODE)" in stderr_output:
-                    print(f"  - 참고: ioctl 오류는 --ignore-negative-one 옵션으로 무시됩니다.")
             
             # 남은 stdout 읽기
             try:
